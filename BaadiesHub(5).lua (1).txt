@@ -437,6 +437,8 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
+    Callback=function(v) S.AntiAFK=v end })
+
 -- ══════════════════════════════════
 -- 🎯 AIMBOT / TRIGGERBOT
 -- ══════════════════════════════════
@@ -457,4 +459,140 @@ AimbotTab:CreateToggle({ Name="Aimbot", CurrentValue=false, Flag="Aimbot",
     Callback=function(v) S.Aimbot=v end })
 
 AimbotTab:CreateToggle({ Name="Wallcheck (Visibilité)", CurrentValue=true, Flag="AimVisCheck",
-    Callback=function(v)
+    Callback=function(v) S.AimVisCheck=v end })
+
+AimbotTab:CreateToggle({ Name="Team Check", CurrentValue=true, Flag="AimTeamCheck",
+    Callback=function(v) S.AimTeamCheck=v end })
+
+AimbotTab:CreateToggle({ Name="Prédiction de Mouvement", CurrentValue=true, Flag="AimPredict",
+    Callback=function(v) S.AimPredict=v end })
+
+AimbotTab:CreateToggle({ Name="Afficher Cercle FOV", CurrentValue=true, Flag="FOVCircle",
+    Callback=function(v) S.FOVCircle=v end })
+
+AimbotTab:CreateSection("Paramètres")
+
+AimbotTab:CreateSlider({ Name="FOV", Range={10,500}, Increment=5, Suffix=" px", CurrentValue=150, Flag="AimFOV",
+    Callback=function(v) S.AimFOV=v end })
+
+AimbotTab:CreateDropdown({ Name="Os Ciblé", Options={"Head","HumanoidRootPart","Torso","Left Arm","Right Arm"},
+    CurrentOption={"Head"}, Flag="AimBone",
+    Callback=function(v) S.AimBone=v[1] or "Head" end })
+
+AimbotTab:CreateDropdown({ Name="Touche d'activation PC", Options={"MouseButton2","MouseButton1","E","Q","F","R","LeftAlt"},
+    CurrentOption={"MouseButton2"}, Flag="AimKey",
+    Callback=function(v) S.AimKey=v[1] or "MouseButton2" end })
+
+-- ══════════════════════════════════
+-- 👁 ESP
+-- ══════════════════════════════════
+
+local ESPTab = Window:CreateTab("👁 ESP", 4483362458)
+
+ESPTab:CreateSection("Activation (Mode Bounding Box)")
+
+ESPTab:CreateToggle({ Name="ESP Global", CurrentValue=false, Flag="ESP",
+    Callback=function(v) S.ESP=v end })
+
+ESPTab:CreateToggle({ Name="Boîtes 3D Parfaites", CurrentValue=true, Flag="ESPBoxes",
+    Callback=function(v) S.ESPBoxes=v end })
+
+ESPTab:CreateToggle({ Name="Noms", CurrentValue=true, Flag="ESPNames",
+    Callback=function(v) S.ESPNames=v end })
+
+ESPTab:CreateToggle({ Name="Barre de Santé", CurrentValue=true, Flag="ESPHealth",
+    Callback=function(v) S.ESPHealth=v end })
+
+ESPTab:CreateToggle({ Name="Traceurs", CurrentValue=false, Flag="ESPTracers",
+    Callback=function(v) S.ESPTracers=v end })
+
+ESPTab:CreateToggle({ Name="Distance", CurrentValue=true, Flag="ESPDist",
+    Callback=function(v) S.ESPDist=v end })
+
+ESPTab:CreateToggle({ Name="Squelette", CurrentValue=false, Flag="ESPSkeleton",
+    Callback=function(v) S.ESPSkeleton=v end })
+
+ESPTab:CreateToggle({ Name="Team Check", CurrentValue=true, Flag="ESPTeamCheck",
+    Callback=function(v) S.ESPTeamCheck=v end })
+
+ESPTab:CreateSection("Paramètres")
+
+ESPTab:CreateSlider({ Name="Distance Max", Range={50,3000}, Increment=50, Suffix=" m", CurrentValue=1000, Flag="ESPMaxDist",
+    Callback=function(v) S.ESPMaxDist=v end })
+
+-- ══════════════════════════════════
+-- 🏃 MOUVEMENT
+-- ══════════════════════════════════
+
+local MovTab = Window:CreateTab("🏃 Mouvement", 4483362458)
+
+MovTab:CreateSection("Vitesse & Vol")
+
+MovTab:CreateToggle({ Name="Speed Hack", CurrentValue=false, Flag="Speed",
+    Callback=function(v) S.Speed=v; if not v then local h=GetHum(LocalPlayer); if h then h.WalkSpeed=16 end end end })
+
+MovTab:CreateSlider({ Name="Vitesse de Marche", Range={16,500}, Increment=1, Suffix=" wu/s", CurrentValue=16, Flag="SpeedVal",
+    Callback=function(v) S.SpeedVal=v end })
+
+MovTab:CreateToggle({ Name="Fly (Vol)", CurrentValue=false, Flag="Fly",
+    Callback=function(v) S.Fly=v; if not v then DisableFly() end end })
+
+MovTab:CreateSlider({ Name="Vitesse de Vol", Range={5,300}, Increment=5, Suffix=" wu/s", CurrentValue=50, Flag="FlySpeed",
+    Callback=function(v) S.FlySpeed=v end })
+
+MovTab:CreateSection("Mobilité")
+
+MovTab:CreateToggle({ Name="Noclip (Passe-Mur)", CurrentValue=false, Flag="Noclip",
+    Callback=function(v) S.Noclip=v end })
+
+MovTab:CreateToggle({ Name="Saut Infini", CurrentValue=false, Flag="InfJump",
+    Callback=function(v) S.InfJump=v end })
+
+MovTab:CreateToggle({ Name="Anti-AFK", CurrentValue=false, Flag="AntiAFK",
+    Callback=function(v) S.AntiAFK=v end })
+
+-- ══════════════════════════════════
+-- ⚔ COMBAT
+-- ══════════════════════════════════
+
+local CombatTab = Window:CreateTab("⚔ Combat", 4483362458)
+
+CombatTab:CreateSection("Avantages Offensifs")
+
+CombatTab:CreateToggle({ Name="Hitbox Expander", CurrentValue=false, Flag="HitboxExpand",
+    Callback=function(v) S.HitboxExpand=v end })
+
+CombatTab:CreateSlider({ Name="Taille Hitbox", Range={4,40}, Increment=1, Suffix=" studs", CurrentValue=5, Flag="HitboxSize",
+    Callback=function(v) S.HitboxSize=v end })
+
+CombatTab:CreateToggle({ Name="Anti-Knockback", CurrentValue=false, Flag="AntiKB",
+    Callback=function(v) S.AntiKB=v end })
+
+-- ══════════════════════════════════
+-- ✨ VISUELS
+-- ══════════════════════════════════
+
+local VisTab = Window:CreateTab("✨ Visuels", 4483362458)
+
+VisTab:CreateToggle({ Name="Fullbright", CurrentValue=false, Flag="Fullbright",
+    Callback=function(v) S.Fullbright=v
+        if not v then Lighting.Brightness=1; Lighting.ClockTime=14; Lighting.GlobalShadows=true; Lighting.Ambient=Color3.fromRGB(70,70,70); Lighting.OutdoorAmbient=Color3.fromRGB(128,128,128) end
+    end })
+
+VisTab:CreateToggle({ Name="No Fog", CurrentValue=false, Flag="NoFog",
+    Callback=function(v) S.NoFog=v end })
+
+VisTab:CreateToggle({ Name="Crosshair Custom", CurrentValue=false, Flag="Crosshair",
+    Callback=function(v) S.Crosshair=v end })
+
+VisTab:CreateSlider({ Name="FOV Caméra", Range={40,120}, Increment=1, Suffix="°", CurrentValue=70, Flag="CamFOV",
+    Callback=function(v) S.CamFOV=v end })
+
+-- ══════════════════════════════════════════════════════════
+--  INIT
+-- ══════════════════════════════════════════════════════════
+
+Rayfield:LoadConfiguration()
+
+Notif("Baadies Hub v3.1 ✅", "Triggerbot & ESP Bounding Box 📱", 5)
+
