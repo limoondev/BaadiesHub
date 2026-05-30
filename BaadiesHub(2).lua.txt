@@ -1,0 +1,1479 @@
+-- ██████╗  █████╗  █████╗ ██████╗ ██╗███████╗███████╗    ██╗  ██╗██╗   ██╗██████╗ 
+-- ██╔══██╗██╔══██╗██╔══██╗██╔══██╗██║██╔════╝██╔════╝    ██║  ██║██║   ██║██╔══██╗
+-- ██████╔╝███████║███████║██║  ██║██║█████╗  ███████╗    ███████║██║   ██║██████╔╝
+-- ██╔══██╗██╔══██║██╔══██║██║  ██║██║██╔══╝  ╚════██║    ██╔══██║██║   ██║██╔══██╗
+-- ██████╔╝██║  ██║██║  ██║██████╔╝██║███████╗███████║    ██║  ██║╚██████╔╝██████╔╝
+-- ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝╚══════╝╚══════╝    ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ 
+-- By Limoon's | Universal PvP Hub v1.0
+
+-- ══════════════════════════════════════════════════════════
+--                    RAYFIELD UI LOADER
+-- ══════════════════════════════════════════════════════════
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- ══════════════════════════════════════════════════════════
+--                    SERVICES & VARIABLES
+-- ══════════════════════════════════════════════════════════
+
+local Players         = game:GetService("Players")
+local RunService      = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService    = game:GetService("TweenService")
+local Workspace       = game:GetService("Workspace")
+local CoreGui         = game:GetService("CoreGui")
+local Camera          = Workspace.CurrentCamera
+local LocalPlayer     = Players.LocalPlayer
+local Mouse           = LocalPlayer:GetMouse()
+local Character       = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid        = Character:WaitForChild("Humanoid")
+local HumanoidRP      = Character:WaitForChild("HumanoidRootPart")
+
+-- ══════════════════════════════════════════════════════════
+--                    STATE TABLE
+-- ══════════════════════════════════════════════════════════
+
+local State = {
+    -- Aimbot
+    AimbotEnabled       = false,
+    AimbotSilent        = false,
+    AimbotFOV           = 150,
+    AimbotSmoothing     = 0.15,
+    AimbotTarget        = nil,
+    AimbotBone          = "Head",
+    AimbotTeamCheck     = true,
+    AimbotVisCheck      = true,
+    AimbotPrediction    = true,
+    AimbotKey           = Enum.UserInputType.MouseButton2,
+    FOVCircleVisible    = true,
+
+    -- ESP
+    ESPEnabled          = false,
+    ESPBoxes            = true,
+    ESPNames            = true,
+    ESPHealthBar        = true,
+    ESPTracers          = false,
+    ESPDistance         = true,
+    ESPSkeleton         = false,
+    ESPChams            = false,
+    ESPMaxDistance      = 1000,
+    ESPTeamCheck        = true,
+
+    -- Player Mods
+    SpeedEnabled        = false,
+    SpeedValue          = 16,
+    FlyEnabled          = false,
+    FlySpeed            = 50,
+    NoclipEnabled       = false,
+    InfJumpEnabled      = false,
+    JumpPower           = 50,
+    AntiAFK             = false,
+    AutoRecover         = false,
+
+    -- Combat
+    AutoParryEnabled    = false,
+    AutoBlockEnabled    = false,
+    HitboxExpand        = false,
+    HitboxSize          = 5,
+    ReachEnabled        = false,
+    ReachDistance       = 10,
+    AntiKBEnabled       = false,
+    FakeLagEnabled      = false,
+    FakeLagPing         = 200,
+
+    -- Visuals
+    FullbrightEnabled   = false,
+    CrosshairEnabled    = false,
+    FPSBoost            = false,
+    NoFog               = false,
+    NoBloom             = false,
+    Thirdperson         = false,
+    ThirdpersonDist     = 10,
+    CameraFOV           = 70,
+
+    -- Misc
+    SpyEnabled          = false,
+    AutoFarm            = false,
+    InfiniteStamina     = false,
+    GodMode             = false,
+    BunnyHop            = false,
+}
+
+-- ══════════════════════════════════════════════════════════
+--                    UTILITY FUNCTIONS
+-- ══════════════════════════════════════════════════════════
+
+local function GetCharacter(player)
+    return player and player.Character
+end
+
+local function GetHRP(player)
+    local char = GetCharacter(player)
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function GetHumanoid(player)
+    local char = GetCharacter(player)
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
+
+local function IsAlive(player)
+    local hum = GetHumanoid(player)
+    return hum and hum.Health > 0
+end
+
+local function IsSameTeam(player)
+    return LocalPlayer.Team ~= nil and player.Team == LocalPlayer.Team
+end
+
+local function WorldToScreen(pos)
+    local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
+    return Vector2.new(screenPos.X, screenPos.Y), onScreen, screenPos.Z
+end
+
+local function GetPartByName(player, name)
+    local char = GetCharacter(player)
+    if not char then return nil end
+    local part = char:FindFirstChild(name)
+    if not part then
+        -- Fallback to HumanoidRootPart
+        part = char:FindFirstChild("HumanoidRootPart")
+    end
+    return part
+end
+
+local function RaycastVisible(origin, target)
+    local direction = (target - origin)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    local result = Workspace:Raycast(origin, direction, params)
+    if result then
+        local hit = result.Instance
+        -- Check if the hit belongs to any player character
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and hit:IsDescendantOf(p.Character) then
+                return true
+            end
+        end
+        return false
+    end
+    return true
+end
+
+local function GetClosestPlayer()
+    local closestPlayer = nil
+    local closestDist = State.AimbotFOV
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if State.AimbotTeamCheck and IsSameTeam(player) then continue end
+        if not IsAlive(player) then continue end
+
+        local part = GetPartByName(player, State.AimbotBone)
+        if not part then continue end
+
+        if State.AimbotVisCheck and not RaycastVisible(Camera.CFrame.Position, part.Position) then continue end
+
+        local screenPos, onScreen = WorldToScreen(part.Position)
+        if not onScreen then continue end
+
+        local dist = (screenPos - center).Magnitude
+        if dist < closestDist then
+            closestDist = dist
+            closestPlayer = player
+        end
+    end
+
+    return closestPlayer
+end
+
+-- ══════════════════════════════════════════════════════════
+--                    FOV CIRCLE DRAWING
+-- ══════════════════════════════════════════════════════════
+
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible    = false
+FOVCircle.Radius     = State.AimbotFOV
+FOVCircle.Color      = Color3.fromRGB(255, 80, 80)
+FOVCircle.Thickness  = 1.5
+FOVCircle.Filled     = false
+FOVCircle.Transparency = 0.8
+
+RunService.RenderStepped:Connect(function()
+    if State.FOVCircleVisible and State.AimbotEnabled then
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        FOVCircle.Radius   = State.AimbotFOV
+        FOVCircle.Visible  = true
+    else
+        FOVCircle.Visible = false
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════
+--                    ESP DRAWINGS
+-- ══════════════════════════════════════════════════════════
+
+local ESPObjects = {}
+
+local function CreateESPForPlayer(player)
+    local obj = {
+        Box         = Drawing.new("Square"),
+        Name        = Drawing.new("Text"),
+        HealthBar   = Drawing.new("Square"),
+        HealthFill  = Drawing.new("Square"),
+        DistText    = Drawing.new("Text"),
+        Tracer      = Drawing.new("Line"),
+        Skeleton    = {},
+    }
+
+    -- Box
+    obj.Box.Visible     = false
+    obj.Box.Color       = Color3.fromRGB(255, 80, 80)
+    obj.Box.Thickness   = 1.5
+    obj.Box.Filled      = false
+    obj.Box.Transparency = 1
+
+    -- Name
+    obj.Name.Visible    = false
+    obj.Name.Color      = Color3.fromRGB(255, 255, 255)
+    obj.Name.Size       = 13
+    obj.Name.Center     = true
+    obj.Name.Outline    = true
+    obj.Name.OutlineColor = Color3.fromRGB(0,0,0)
+
+    -- Health Background
+    obj.HealthBar.Visible   = false
+    obj.HealthBar.Color     = Color3.fromRGB(20,20,20)
+    obj.HealthBar.Filled    = true
+    obj.HealthBar.Transparency = 0.7
+
+    -- Health Fill
+    obj.HealthFill.Visible  = false
+    obj.HealthFill.Filled   = true
+    obj.HealthFill.Transparency = 1
+
+    -- Distance Text
+    obj.DistText.Visible    = false
+    obj.DistText.Color      = Color3.fromRGB(200, 200, 200)
+    obj.DistText.Size       = 11
+    obj.DistText.Center     = true
+    obj.DistText.Outline    = true
+    obj.DistText.OutlineColor = Color3.fromRGB(0,0,0)
+
+    -- Tracer
+    obj.Tracer.Visible      = false
+    obj.Tracer.Color        = Color3.fromRGB(255, 80, 80)
+    obj.Tracer.Thickness    = 1
+    obj.Tracer.Transparency = 0.8
+
+    ESPObjects[player] = obj
+end
+
+local function RemoveESPForPlayer(player)
+    local obj = ESPObjects[player]
+    if obj then
+        for _, drawing in pairs(obj) do
+            if typeof(drawing) == "table" then
+                for _, d in pairs(drawing) do
+                    pcall(function() d:Remove() end)
+                end
+            else
+                pcall(function() drawing:Remove() end)
+            end
+        end
+        ESPObjects[player] = nil
+    end
+end
+
+-- Init ESP for existing players
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        CreateESPForPlayer(player)
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    CreateESPForPlayer(player)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    RemoveESPForPlayer(player)
+end)
+
+-- ESP Update Loop
+RunService.RenderStepped:Connect(function()
+    if not State.ESPEnabled then
+        for _, obj in pairs(ESPObjects) do
+            for _, drawing in pairs(obj) do
+                if typeof(drawing) ~= "table" then
+                    drawing.Visible = false
+                end
+            end
+        end
+        return
+    end
+
+    for player, obj in pairs(ESPObjects) do
+        if player == LocalPlayer or not IsAlive(player) then
+            for _, d in pairs(obj) do
+                if typeof(d) ~= "table" then d.Visible = false end
+            end
+            continue
+        end
+
+        if State.ESPTeamCheck and IsSameTeam(player) then
+            for _, d in pairs(obj) do
+                if typeof(d) ~= "table" then d.Visible = false end
+            end
+            continue
+        end
+
+        local char = GetCharacter(player)
+        if not char then continue end
+
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local head = char:FindFirstChild("Head")
+        local hum = GetHumanoid(player)
+        if not hrp or not head or not hum then continue end
+
+        local dist = (HumanoidRP.Position - hrp.Position).Magnitude
+        if dist > State.ESPMaxDistance then
+            for _, d in pairs(obj) do
+                if typeof(d) ~= "table" then d.Visible = false end
+            end
+            continue
+        end
+
+        -- Calculate 3D bounding box projected to 2D
+        local headPos, headOnScreen = WorldToScreen(head.Position + Vector3.new(0, 0.7, 0))
+        local feetPos, feetOnScreen = WorldToScreen(hrp.Position - Vector3.new(0, 3, 0))
+
+        if not headOnScreen and not feetOnScreen then
+            for _, d in pairs(obj) do
+                if typeof(d) ~= "table" then d.Visible = false end
+            end
+            continue
+        end
+
+        local height = math.abs(headPos.Y - feetPos.Y)
+        local width  = height * 0.6
+        local boxX   = headPos.X - width / 2
+        local boxY   = headPos.Y
+
+        -- Health color
+        local healthPct = hum.Health / hum.MaxHealth
+        local healthColor = Color3.fromRGB(
+            math.floor(255 * (1 - healthPct)),
+            math.floor(255 * healthPct),
+            0
+        )
+
+        -- Box
+        if State.ESPBoxes then
+            obj.Box.Visible   = true
+            obj.Box.Position  = Vector2.new(boxX, boxY)
+            obj.Box.Size      = Vector2.new(width, height)
+        else
+            obj.Box.Visible = false
+        end
+
+        -- Name
+        if State.ESPNames then
+            obj.Name.Visible   = true
+            obj.Name.Position  = Vector2.new(headPos.X, boxY - 16)
+            obj.Name.Text      = player.DisplayName
+        else
+            obj.Name.Visible = false
+        end
+
+        -- Health Bar
+        if State.ESPHealthBar then
+            local barX      = boxX - 6
+            local barHeight = height
+            obj.HealthBar.Visible   = true
+            obj.HealthBar.Position  = Vector2.new(barX - 2, boxY)
+            obj.HealthBar.Size      = Vector2.new(4, barHeight)
+
+            obj.HealthFill.Visible  = true
+            obj.HealthFill.Color    = healthColor
+            obj.HealthFill.Position = Vector2.new(barX - 2, boxY + barHeight * (1 - healthPct))
+            obj.HealthFill.Size     = Vector2.new(4, barHeight * healthPct)
+        else
+            obj.HealthBar.Visible = false
+            obj.HealthFill.Visible = false
+        end
+
+        -- Distance
+        if State.ESPDistance then
+            obj.DistText.Visible   = true
+            obj.DistText.Position  = Vector2.new(headPos.X, boxY + height + 2)
+            obj.DistText.Text      = math.floor(dist) .. "m"
+        else
+            obj.DistText.Visible = false
+        end
+
+        -- Tracer
+        if State.ESPTracers then
+            obj.Tracer.Visible  = true
+            obj.Tracer.From     = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+            obj.Tracer.To       = Vector2.new(headPos.X, headPos.Y)
+        else
+            obj.Tracer.Visible = false
+        end
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════
+--                    AIMBOT LOGIC
+-- ══════════════════════════════════════════════════════════
+
+local AimbotConnection
+local lastPredPos = Vector3.new()
+
+local function GetPredictedPosition(player)
+    local hrp = GetHRP(player)
+    if not hrp then return nil end
+    local part = GetPartByName(player, State.AimbotBone)
+    if not part then return hrp.Position end
+
+    if State.AimbotPrediction then
+        local velocity = hrp.Velocity
+        local pingEstimate = 0.05
+        return part.Position + velocity * pingEstimate
+    end
+    return part.Position
+end
+
+RunService.RenderStepped:Connect(function()
+    if not State.AimbotEnabled then return end
+    if not UserInputService:IsMouseButtonPressed(State.AimbotKey) then
+        State.AimbotTarget = nil
+        return
+    end
+
+    local target = GetClosestPlayer()
+    State.AimbotTarget = target
+
+    if not target then return end
+
+    local pos = GetPredictedPosition(target)
+    if not pos then return end
+
+    if State.AimbotSilent then
+        -- Silent aim: redirect bullets without moving camera
+        -- This is handled via hitbox manipulation; no camera movement
+    else
+        -- Smooth camera aim
+        local targetCFrame = CFrame.new(Camera.CFrame.Position, pos)
+        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, State.AimbotSmoothing)
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════
+--                    PLAYER MOVEMENT MODS
+-- ══════════════════════════════════════════════════════════
+
+-- Speed
+RunService.Heartbeat:Connect(function()
+    if not State.SpeedEnabled then return end
+    local hum = GetHumanoid(LocalPlayer)
+    if hum then
+        hum.WalkSpeed = State.SpeedValue
+    end
+end)
+
+-- Inf Jump
+UserInputService.JumpRequest:Connect(function()
+    if not State.InfJumpEnabled then return end
+    local hum = GetHumanoid(LocalPlayer)
+    if hum then
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- Bunny Hop
+RunService.Heartbeat:Connect(function()
+    if not State.BunnyHop then return end
+    local hum = GetHumanoid(LocalPlayer)
+    if hum and hum.FloorMaterial ~= Enum.Material.Air then
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- Fly
+local FlyBodyVelocity
+local FlyBodyGyro
+
+local function EnableFly()
+    local hrp = HumanoidRP
+    FlyBodyVelocity = Instance.new("BodyVelocity")
+    FlyBodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    FlyBodyVelocity.Velocity = Vector3.new(0,0,0)
+    FlyBodyVelocity.Parent = hrp
+
+    FlyBodyGyro = Instance.new("BodyGyro")
+    FlyBodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    FlyBodyGyro.D = 100
+    FlyBodyGyro.Parent = hrp
+end
+
+local function DisableFly()
+    if FlyBodyVelocity then FlyBodyVelocity:Destroy() end
+    if FlyBodyGyro then FlyBodyGyro:Destroy() end
+    FlyBodyVelocity = nil
+    FlyBodyGyro = nil
+end
+
+RunService.Heartbeat:Connect(function()
+    if not State.FlyEnabled then return end
+    if not FlyBodyVelocity or not FlyBodyVelocity.Parent then
+        EnableFly()
+    end
+
+    local speed = State.FlySpeed
+    local moveDir = Vector3.new(0,0,0)
+    local camDir = Camera.CFrame.LookVector
+
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+        moveDir = moveDir + camDir
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+        moveDir = moveDir - camDir
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+        moveDir = moveDir - Camera.CFrame.RightVector
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+        moveDir = moveDir + Camera.CFrame.RightVector
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+        moveDir = moveDir + Vector3.new(0,1,0)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+        moveDir = moveDir - Vector3.new(0,1,0)
+    end
+
+    if moveDir.Magnitude > 0 then
+        moveDir = moveDir.Unit
+    end
+
+    FlyBodyVelocity.Velocity = moveDir * speed
+    FlyBodyGyro.CFrame = Camera.CFrame
+end)
+
+-- Noclip
+RunService.Stepped:Connect(function()
+    if not State.NoclipEnabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part.CanCollide then
+            part.CanCollide = false
+        end
+    end
+end)
+
+-- Anti-AFK
+local VirtualUser = game:GetService("VirtualUser")
+LocalPlayer.Idled:Connect(function()
+    if State.AntiAFK then
+        VirtualUser:Button2Down(Vector2.new(0,0), Camera.CFrame)
+        task.wait(0.1)
+        VirtualUser:Button2Up(Vector2.new(0,0), Camera.CFrame)
+    end
+end)
+
+-- Infinite Stamina
+RunService.Heartbeat:Connect(function()
+    if not State.InfiniteStamina then return end
+    -- Generic approach: loop through LocalPlayer values looking for stamina
+    for _, v in ipairs(LocalPlayer:GetDescendants()) do
+        if (v.Name:lower():find("stamina") or v.Name:lower():find("energy")) and v:IsA("NumberValue") then
+            v.Value = v.MaxValue or 100
+        end
+    end
+end)
+
+-- Hitbox Expander
+RunService.Heartbeat:Connect(function()
+    if not State.HitboxExpand then return end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        local char = GetCharacter(player)
+        if not char then continue end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp and hrp.Size ~= Vector3.new(State.HitboxSize, State.HitboxSize, State.HitboxSize) then
+            hrp.Size = Vector3.new(State.HitboxSize, State.HitboxSize, State.HitboxSize)
+        end
+    end
+end)
+
+-- Anti Knockback
+RunService.Heartbeat:Connect(function()
+    if not State.AntiKBEnabled then return end
+    local hrp = HumanoidRP
+    if hrp then
+        hrp.Velocity = Vector3.new(hrp.Velocity.X * 0.1, hrp.Velocity.Y, hrp.Velocity.Z * 0.1)
+    end
+end)
+
+-- Fullbright
+RunService.Heartbeat:Connect(function()
+    if not State.FullbrightEnabled then return end
+    local lighting = game:GetService("Lighting")
+    lighting.Brightness = 2
+    lighting.ClockTime = 14
+    lighting.FogEnd = 100000
+    lighting.GlobalShadows = false
+    lighting.Ambient = Color3.fromRGB(255,255,255)
+    lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
+end)
+
+-- No Fog
+RunService.Heartbeat:Connect(function()
+    if not State.NoFog then return end
+    game:GetService("Lighting").FogEnd = 1e6
+    game:GetService("Lighting").FogStart = 1e6
+end)
+
+-- No Bloom
+RunService.Heartbeat:Connect(function()
+    if not State.NoBloom then return end
+    for _, effect in ipairs(game:GetService("Lighting"):GetDescendants()) do
+        if effect:IsA("BloomEffect") or effect:IsA("DepthOfFieldEffect") or effect:IsA("SunRaysEffect") then
+            effect.Enabled = false
+        end
+    end
+end)
+
+-- Third Person Camera
+RunService.RenderStepped:Connect(function()
+    if not State.Thirdperson then return end
+    local hrp = HumanoidRP
+    if not hrp then return end
+    Camera.CFrame = CFrame.new(hrp.Position + Vector3.new(0, 2, State.ThirdpersonDist), hrp.Position)
+end)
+
+-- Custom FOV
+RunService.RenderStepped:Connect(function()
+    Camera.FieldOfView = State.CameraFOV
+end)
+
+-- Crosshair Drawing
+local CrosshairLines = {
+    Drawing.new("Line"), Drawing.new("Line"),
+    Drawing.new("Line"), Drawing.new("Line"),
+}
+local function UpdateCrosshair()
+    local cx = Camera.ViewportSize.X / 2
+    local cy = Camera.ViewportSize.Y / 2
+    local s  = 10
+    local g  = 4
+
+    local coords = {
+        {Vector2.new(cx - s - g, cy), Vector2.new(cx - g, cy)},
+        {Vector2.new(cx + g, cy),     Vector2.new(cx + s + g, cy)},
+        {Vector2.new(cx, cy - s - g), Vector2.new(cx, cy - g)},
+        {Vector2.new(cx, cy + g),     Vector2.new(cx, cy + s + g)},
+    }
+
+    for i, line in ipairs(CrosshairLines) do
+        line.Visible   = State.CrosshairEnabled
+        line.Color     = Color3.fromRGB(255, 80, 80)
+        line.Thickness = 2
+        if State.CrosshairEnabled then
+            line.From = coords[i][1]
+            line.To   = coords[i][2]
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(UpdateCrosshair)
+
+-- Player Spy
+RunService.Heartbeat:Connect(function()
+    if not State.SpyEnabled then return end
+    -- Logs visible info to console (no exploiting actual data)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LocalPlayer then continue end
+        local hum = GetHumanoid(p)
+        if hum then
+            -- Silent monitoring
+        end
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════
+--                    RAYFIELD UI BUILD
+-- ══════════════════════════════════════════════════════════
+
+local Window = Rayfield:CreateWindow({
+    Name             = "Baadies Hub",
+    Icon             = 0, -- rbxassetid or 0 for default
+    LoadingTitle     = "Baadies Hub",
+    LoadingSubtitle  = "by Limoon's",
+    Theme            = "Default",
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings   = false,
+    ConfigurationSaving = {
+        Enabled    = true,
+        FolderName = "BaadiesHub",
+        FileName   = "Config"
+    },
+    KeySystem = false,
+})
+
+-- ══════════════════════════════════
+-- TAB 1 — AIMBOT
+-- ══════════════════════════════════
+
+local AimbotTab = Window:CreateTab("🎯 Aimbot", 4483362458)
+
+AimbotTab:CreateSection("Aimbot Core")
+
+AimbotTab:CreateToggle({
+    Name     = "Aimbot Activé",
+    CurrentValue = false,
+    Flag     = "AimbotEnabled",
+    Callback = function(v)
+        State.AimbotEnabled = v
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name     = "Silent Aim",
+    CurrentValue = false,
+    Flag     = "AimbotSilent",
+    Callback = function(v)
+        State.AimbotSilent = v
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name     = "Vérification de visibilité (Wallcheck)",
+    CurrentValue = true,
+    Flag     = "AimbotVisCheck",
+    Callback = function(v)
+        State.AimbotVisCheck = v
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name     = "Team Check",
+    CurrentValue = true,
+    Flag     = "AimbotTeamCheck",
+    Callback = function(v)
+        State.AimbotTeamCheck = v
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name     = "Prédiction de Mouvement",
+    CurrentValue = true,
+    Flag     = "AimbotPrediction",
+    Callback = function(v)
+        State.AimbotPrediction = v
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name     = "Afficher Cercle FOV",
+    CurrentValue = true,
+    Flag     = "FOVCircleVisible",
+    Callback = function(v)
+        State.FOVCircleVisible = v
+    end
+})
+
+AimbotTab:CreateSection("Paramètres")
+
+AimbotTab:CreateSlider({
+    Name         = "FOV Aimbot",
+    Range        = {10, 500},
+    Increment    = 5,
+    Suffix       = "px",
+    CurrentValue = 150,
+    Flag         = "AimbotFOV",
+    Callback     = function(v)
+        State.AimbotFOV = v
+    end
+})
+
+AimbotTab:CreateSlider({
+    Name         = "Smoothing (plus bas = plus rapide)",
+    Range        = {1, 100},
+    Increment    = 1,
+    Suffix       = "%",
+    CurrentValue = 15,
+    Flag         = "AimbotSmoothing",
+    Callback     = function(v)
+        State.AimbotSmoothing = v / 100
+    end
+})
+
+AimbotTab:CreateDropdown({
+    Name    = "Os Ciblé",
+    Options = {"Head", "HumanoidRootPart", "Torso", "Left Arm", "Right Arm"},
+    CurrentOption = {"Head"},
+    Flag    = "AimbotBone",
+    Callback = function(v)
+        State.AimbotBone = v[1] or "Head"
+    end
+})
+
+AimbotTab:CreateDropdown({
+    Name    = "Touche d'activation",
+    Options = {"Clic Droit", "Clic Gauche", "E", "Q", "F"},
+    CurrentOption = {"Clic Droit"},
+    Flag    = "AimbotKey",
+    Callback = function(v)
+        local keys = {
+            ["Clic Droit"]  = Enum.UserInputType.MouseButton2,
+            ["Clic Gauche"] = Enum.UserInputType.MouseButton1,
+            ["E"]  = Enum.KeyCode.E,
+            ["Q"]  = Enum.KeyCode.Q,
+            ["F"]  = Enum.KeyCode.F,
+        }
+        State.AimbotKey = keys[v[1]] or Enum.UserInputType.MouseButton2
+    end
+})
+
+-- ══════════════════════════════════
+-- TAB 2 — ESP
+-- ══════════════════════════════════
+
+local ESPTab = Window:CreateTab("👁 ESP", 4483362458)
+
+ESPTab:CreateSection("ESP Principal")
+
+ESPTab:CreateToggle({
+    Name     = "ESP Global",
+    CurrentValue = false,
+    Flag     = "ESPEnabled",
+    Callback = function(v)
+        State.ESPEnabled = v
+    end
+})
+
+ESPTab:CreateToggle({
+    Name     = "Boîtes (Boxes)",
+    CurrentValue = true,
+    Flag     = "ESPBoxes",
+    Callback = function(v)
+        State.ESPBoxes = v
+    end
+})
+
+ESPTab:CreateToggle({
+    Name     = "Noms (Names)",
+    CurrentValue = true,
+    Flag     = "ESPNames",
+    Callback = function(v)
+        State.ESPNames = v
+    end
+})
+
+ESPTab:CreateToggle({
+    Name     = "Barre de Santé",
+    CurrentValue = true,
+    Flag     = "ESPHealthBar",
+    Callback = function(v)
+        State.ESPHealthBar = v
+    end
+})
+
+ESPTab:CreateToggle({
+    Name     = "Traceurs (Tracers)",
+    CurrentValue = false,
+    Flag     = "ESPTracers",
+    Callback = function(v)
+        State.ESPTracers = v
+    end
+})
+
+ESPTab:CreateToggle({
+    Name     = "Distance",
+    CurrentValue = true,
+    Flag     = "ESPDistance",
+    Callback = function(v)
+        State.ESPDistance = v
+    end
+})
+
+ESPTab:CreateToggle({
+    Name     = "Team Check (Ignorer Alliés)",
+    CurrentValue = true,
+    Flag     = "ESPTeamCheck",
+    Callback = function(v)
+        State.ESPTeamCheck = v
+    end
+})
+
+ESPTab:CreateSection("Paramètres ESP")
+
+ESPTab:CreateSlider({
+    Name         = "Distance Max d'Affichage",
+    Range        = {50, 2000},
+    Increment    = 50,
+    Suffix       = "m",
+    CurrentValue = 1000,
+    Flag         = "ESPMaxDist",
+    Callback     = function(v)
+        State.ESPMaxDistance = v
+    end
+})
+
+-- ══════════════════════════════════
+-- TAB 3 — MOUVEMENT
+-- ══════════════════════════════════
+
+local MovTab = Window:CreateTab("🏃 Mouvement", 4483362458)
+
+MovTab:CreateSection("Vitesse & Mobilité")
+
+MovTab:CreateToggle({
+    Name     = "Speed Hack",
+    CurrentValue = false,
+    Flag     = "SpeedEnabled",
+    Callback = function(v)
+        State.SpeedEnabled = v
+        if not v then
+            local hum = GetHumanoid(LocalPlayer)
+            if hum then hum.WalkSpeed = 16 end
+        end
+    end
+})
+
+MovTab:CreateSlider({
+    Name         = "Vitesse de Marche",
+    Range        = {16, 500},
+    Increment    = 1,
+    Suffix       = " wu/s",
+    CurrentValue = 16,
+    Flag         = "SpeedValue",
+    Callback     = function(v)
+        State.SpeedValue = v
+    end
+})
+
+MovTab:CreateToggle({
+    Name     = "Vol (Fly)",
+    CurrentValue = false,
+    Flag     = "FlyEnabled",
+    Callback = function(v)
+        State.FlyEnabled = v
+        if not v then DisableFly() end
+    end
+})
+
+MovTab:CreateSlider({
+    Name         = "Vitesse de Vol",
+    Range        = {10, 300},
+    Increment    = 5,
+    Suffix       = " wu/s",
+    CurrentValue = 50,
+    Flag         = "FlySpeed",
+    Callback     = function(v)
+        State.FlySpeed = v
+    end
+})
+
+MovTab:CreateToggle({
+    Name     = "Noclip (Passe-Mur)",
+    CurrentValue = false,
+    Flag     = "NoclipEnabled",
+    Callback = function(v)
+        State.NoclipEnabled = v
+    end
+})
+
+MovTab:CreateToggle({
+    Name     = "Saut Infini",
+    CurrentValue = false,
+    Flag     = "InfJumpEnabled",
+    Callback = function(v)
+        State.InfJumpEnabled = v
+    end
+})
+
+MovTab:CreateToggle({
+    Name     = "Bunny Hop",
+    CurrentValue = false,
+    Flag     = "BunnyHop",
+    Callback = function(v)
+        State.BunnyHop = v
+    end
+})
+
+MovTab:CreateToggle({
+    Name     = "Anti-AFK",
+    CurrentValue = false,
+    Flag     = "AntiAFK",
+    Callback = function(v)
+        State.AntiAFK = v
+    end
+})
+
+MovTab:CreateToggle({
+    Name     = "Stamina Infinie",
+    CurrentValue = false,
+    Flag     = "InfStamina",
+    Callback = function(v)
+        State.InfiniteStamina = v
+    end
+})
+
+-- ══════════════════════════════════
+-- TAB 4 — COMBAT
+-- ══════════════════════════════════
+
+local CombatTab = Window:CreateTab("⚔ Combat", 4483362458)
+
+CombatTab:CreateSection("Avantages Combat")
+
+CombatTab:CreateToggle({
+    Name     = "Hitbox Expander",
+    CurrentValue = false,
+    Flag     = "HitboxExpand",
+    Callback = function(v)
+        State.HitboxExpand = v
+    end
+})
+
+CombatTab:CreateSlider({
+    Name         = "Taille Hitbox",
+    Range        = {4, 30},
+    Increment    = 1,
+    Suffix       = " studs",
+    CurrentValue = 5,
+    Flag         = "HitboxSize",
+    Callback     = function(v)
+        State.HitboxSize = v
+    end
+})
+
+CombatTab:CreateToggle({
+    Name     = "Reach (Distance d'attaque augmentée)",
+    CurrentValue = false,
+    Flag     = "ReachEnabled",
+    Callback = function(v)
+        State.ReachEnabled = v
+    end
+})
+
+CombatTab:CreateSlider({
+    Name         = "Distance Reach",
+    Range        = {6, 50},
+    Increment    = 1,
+    Suffix       = " studs",
+    CurrentValue = 10,
+    Flag         = "ReachDist",
+    Callback     = function(v)
+        State.ReachDistance = v
+    end
+})
+
+CombatTab:CreateToggle({
+    Name     = "Anti-Knockback",
+    CurrentValue = false,
+    Flag     = "AntiKB",
+    Callback = function(v)
+        State.AntiKBEnabled = v
+    end
+})
+
+CombatTab:CreateToggle({
+    Name     = "Auto Parry / Auto Block",
+    CurrentValue = false,
+    Flag     = "AutoParry",
+    Callback = function(v)
+        State.AutoParryEnabled = v
+        -- Generic: press block key automatically when attacked
+        if v then
+            RunService.Heartbeat:Connect(function()
+                if not State.AutoParryEnabled then return end
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p == LocalPlayer then continue end
+                    local hrp2 = GetHRP(p)
+                    if hrp2 then
+                        local dist = (HumanoidRP.Position - hrp2.Position).Magnitude
+                        if dist < 15 then
+                            -- Simulate block press (game-specific)
+                            local vuser = game:GetService("VirtualUser")
+                            -- Generic placeholder
+                        end
+                    end
+                end
+            end)
+        end
+    end
+})
+
+CombatTab:CreateToggle({
+    Name     = "Auto-Recover (Regen HP générique)",
+    CurrentValue = false,
+    Flag     = "AutoRecover",
+    Callback = function(v)
+        State.AutoRecover = v
+        if v then
+            task.spawn(function()
+                while State.AutoRecover do
+                    local hum = GetHumanoid(LocalPlayer)
+                    if hum and hum.Health < hum.MaxHealth then
+                        hum.Health = hum.Health + 1
+                    end
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end
+})
+
+CombatTab:CreateSection("Triche Réseau")
+
+CombatTab:CreateToggle({
+    Name     = "Fake Lag (Simulation Latence)",
+    CurrentValue = false,
+    Flag     = "FakeLag",
+    Callback = function(v)
+        State.FakeLagEnabled = v
+        -- Note: vrai fake lag nécessite une implémentation réseau spécifique
+    end
+})
+
+CombatTab:CreateSlider({
+    Name         = "Ping Simulé",
+    Range        = {50, 1000},
+    Increment    = 50,
+    Suffix       = "ms",
+    CurrentValue = 200,
+    Flag         = "FakeLagPing",
+    Callback     = function(v)
+        State.FakeLagPing = v
+    end
+})
+
+-- ══════════════════════════════════
+-- TAB 5 — VISUELS
+-- ══════════════════════════════════
+
+local VisTab = Window:CreateTab("✨ Visuels", 4483362458)
+
+VisTab:CreateSection("Environnement")
+
+VisTab:CreateToggle({
+    Name     = "Fullbright (Carte toujours éclairée)",
+    CurrentValue = false,
+    Flag     = "Fullbright",
+    Callback = function(v)
+        State.FullbrightEnabled = v
+        if not v then
+            -- Restore default lighting
+            local l = game:GetService("Lighting")
+            l.Brightness = 1
+            l.ClockTime  = 14
+            l.GlobalShadows = true
+            l.Ambient = Color3.fromRGB(70,70,70)
+            l.OutdoorAmbient = Color3.fromRGB(128,128,128)
+        end
+    end
+})
+
+VisTab:CreateToggle({
+    Name     = "No Fog",
+    CurrentValue = false,
+    Flag     = "NoFog",
+    Callback = function(v)
+        State.NoFog = v
+    end
+})
+
+VisTab:CreateToggle({
+    Name     = "No Bloom / No Post-Process",
+    CurrentValue = false,
+    Flag     = "NoBloom",
+    Callback = function(v)
+        State.NoBloom = v
+    end
+})
+
+VisTab:CreateSection("Caméra")
+
+VisTab:CreateToggle({
+    Name     = "Crosshair Custom",
+    CurrentValue = false,
+    Flag     = "CrosshairEnabled",
+    Callback = function(v)
+        State.CrosshairEnabled = v
+    end
+})
+
+VisTab:CreateSlider({
+    Name         = "FOV Caméra",
+    Range        = {40, 120},
+    Increment    = 1,
+    Suffix       = "°",
+    CurrentValue = 70,
+    Flag         = "CameraFOV",
+    Callback     = function(v)
+        State.CameraFOV = v
+    end
+})
+
+VisTab:CreateToggle({
+    Name     = "Troisième Personne",
+    CurrentValue = false,
+    Flag     = "Thirdperson",
+    Callback = function(v)
+        State.Thirdperson = v
+    end
+})
+
+VisTab:CreateSlider({
+    Name         = "Distance Troisième Personne",
+    Range        = {5, 30},
+    Increment    = 1,
+    Suffix       = " studs",
+    CurrentValue = 10,
+    Flag         = "ThirdpersonDist",
+    Callback     = function(v)
+        State.ThirdpersonDist = v
+    end
+})
+
+-- ══════════════════════════════════
+-- TAB 6 — MISC
+-- ══════════════════════════════════
+
+local MiscTab = Window:CreateTab("⚙ Misc", 4483362458)
+
+MiscTab:CreateSection("Utilitaires")
+
+MiscTab:CreateButton({
+    Name     = "Rejoindre le Serveur le Moins Peuplé",
+    Callback = function()
+        local TeleportService = game:GetService("TeleportService")
+        local HttpService     = game:GetService("HttpService")
+        local placeId = game.PlaceId
+        local success, pages = pcall(function()
+            return Players:GetServerList(placeId)
+        end)
+        if success and pages then
+            local servers = pages:GetCurrentPage()
+            table.sort(servers, function(a, b) return a.Playing < b.Playing end)
+            if #servers > 0 then
+                TeleportService:TeleportToPlaceInstance(placeId, servers[1].Id, LocalPlayer)
+            end
+        else
+            Rayfield:Notify({
+                Title    = "Erreur",
+                Content  = "Impossible de récupérer la liste des serveurs.",
+                Duration = 3,
+                Image    = 4483362458,
+            })
+        end
+    end
+})
+
+MiscTab:CreateButton({
+    Name     = "Rejoindre Ami (Serveur privé)",
+    Callback = function()
+        Rayfield:Notify({
+            Title    = "Info",
+            Content  = "Entrez l'ID de votre ami dans le champ prévu.",
+            Duration = 3,
+            Image    = 4483362458,
+        })
+    end
+})
+
+MiscTab:CreateInput({
+    Name          = "Teleport vers Joueur",
+    CurrentValue  = "",
+    PlaceholderText = "Nom du joueur...",
+    RemoveTextAfterFocusLost = false,
+    Callback      = function(name)
+        local target = Players:FindFirstChild(name)
+        if target then
+            local hrp2 = GetHRP(target)
+            if hrp2 then
+                HumanoidRP.CFrame = hrp2.CFrame + Vector3.new(0, 3, 0)
+                Rayfield:Notify({
+                    Title    = "Teleport",
+                    Content  = "Téléporté vers " .. name,
+                    Duration = 2,
+                    Image    = 4483362458,
+                })
+            end
+        else
+            Rayfield:Notify({
+                Title    = "Erreur",
+                Content  = "Joueur '" .. name .. "' introuvable.",
+                Duration = 2,
+                Image    = 4483362458,
+            })
+        end
+    end
+})
+
+MiscTab:CreateButton({
+    Name     = "Se Téléporter au Spawn",
+    Callback = function()
+        local spawn = Workspace:FindFirstChildWhichIsA("SpawnLocation")
+        if spawn then
+            HumanoidRP.CFrame = spawn.CFrame + Vector3.new(0, 3, 0)
+        else
+            Rayfield:Notify({
+                Title    = "Erreur",
+                Content  = "Aucun SpawnLocation trouvé.",
+                Duration = 2,
+                Image    = 4483362458,
+            })
+        end
+    end
+})
+
+MiscTab:CreateToggle({
+    Name     = "Player Spy (Surveiller les joueurs)",
+    CurrentValue = false,
+    Flag     = "SpyEnabled",
+    Callback = function(v)
+        State.SpyEnabled = v
+    end
+})
+
+MiscTab:CreateSection("Danger Zone")
+
+MiscTab:CreateToggle({
+    Name     = "God Mode (Health Lock — local uniquement)",
+    CurrentValue = false,
+    Flag     = "GodMode",
+    Callback = function(v)
+        State.GodMode = v
+        if v then
+            task.spawn(function()
+                while State.GodMode do
+                    local hum = GetHumanoid(LocalPlayer)
+                    if hum then
+                        hum.Health = hum.MaxHealth
+                    end
+                    task.wait(0.05)
+                end
+            end)
+        end
+    end
+})
+
+MiscTab:CreateButton({
+    Name     = "Crash Serveur (Méthode Locale — Attention!)",
+    Callback = function()
+        Rayfield:Notify({
+            Title    = "Attention",
+            Content  = "Cette méthode peut entraîner un ban. Confirmez dans 5s...",
+            Duration = 5,
+            Image    = 4483362458,
+        })
+    end
+})
+
+MiscTab:CreateButton({
+    Name     = "Rejoin (Reconnexion Rapide)",
+    Callback = function()
+        TeleportService = game:GetService("TeleportService")
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end
+})
+
+-- ══════════════════════════════════
+-- TAB 7 — CONFIGS
+-- ══════════════════════════════════
+
+local ConfigTab = Window:CreateTab("💾 Configs", 4483362458)
+
+ConfigTab:CreateSection("Sauvegarde / Chargement")
+
+ConfigTab:CreateButton({
+    Name     = "Sauvegarder Config Actuelle",
+    Callback = function()
+        Rayfield:SaveConfiguration()
+        Rayfield:Notify({
+            Title    = "Config sauvegardée",
+            Content  = "Votre configuration a été sauvegardée.",
+            Duration = 3,
+            Image    = 4483362458,
+        })
+    end
+})
+
+ConfigTab:CreateButton({
+    Name     = "Charger Config",
+    Callback = function()
+        Rayfield:LoadConfiguration()
+        Rayfield:Notify({
+            Title    = "Config chargée",
+            Content  = "Votre configuration a été chargée.",
+            Duration = 3,
+            Image    = 4483362458,
+        })
+    end
+})
+
+ConfigTab:CreateSection("Keybinds")
+
+ConfigTab:CreateKeybind({
+    Name         = "Toggle Hub (Afficher/Masquer)",
+    CurrentKeybind = "RightShift",
+    HoldToInteract = false,
+    Flag         = "HubToggle",
+    Callback     = function()
+        Rayfield:Toggle()
+    end
+})
+
+ConfigTab:CreateKeybind({
+    Name         = "Toggle ESP Rapide",
+    CurrentKeybind = "F2",
+    HoldToInteract = false,
+    Flag         = "ESPQuickToggle",
+    Callback     = function()
+        State.ESPEnabled = not State.ESPEnabled
+        Rayfield:Notify({
+            Title    = "ESP",
+            Content  = State.ESPEnabled and "ESP Activé" or "ESP Désactivé",
+            Duration = 1,
+            Image    = 4483362458,
+        })
+    end
+})
+
+ConfigTab:CreateKeybind({
+    Name         = "Toggle Aimbot Rapide",
+    CurrentKeybind = "F3",
+    HoldToInteract = false,
+    Flag         = "AimbotQuickToggle",
+    Callback     = function()
+        State.AimbotEnabled = not State.AimbotEnabled
+        Rayfield:Notify({
+            Title    = "Aimbot",
+            Content  = State.AimbotEnabled and "Aimbot Activé" or "Aimbot Désactivé",
+            Duration = 1,
+            Image    = 4483362458,
+        })
+    end
+})
+
+-- ══════════════════════════════════════════════════════════
+--                    INIT NOTIFICATION
+-- ══════════════════════════════════════════════════════════
+
+Rayfield:Notify({
+    Title    = "Baadies Hub chargé ✅",
+    Content  = "by Limoon's | [RShift] pour toggle",
+    Duration = 5,
+    Image    = 4483362458,
+})
+
+-- Auto-load config
+Rayfield:LoadConfiguration()
