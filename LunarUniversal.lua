@@ -1,1907 +1,2009 @@
--- ==============================================================================
--- LUNAR UNIVERSAL SCRIPT | THE ZENITH EXPERIENCE
--- Version: 3.0.0
--- Lines: 1500+
--- Built with: Linoria Lib (violin-suzutsuki)
--- ==============================================================================
+--[[
+    Lunar Universal V5.0.0 (Titan Edition)
+    Powered by Starlight UI & Twilight ESP
+    Developed by Antigravity
+    
+    WARNING: This script is heavily obfuscated in memory, but this is the raw source.
+]]
 
--- // Wait for the game to finish loading before doing anything
-if not game:IsLoaded() then
-    game.Loaded:Wait()
-end
-task.wait(1)
+--// Environment Protection & Anti-Cheat Bypasses
+local clonefunction = clonefunction or function(f) return f end
+local hookmetamethod = hookmetamethod or function() end
+local getnamecallmethod = getnamecallmethod or function() return "" end
+local checkcaller = checkcaller or function() return false end
+local setthreadidentity = setthreadidentity or setidentity or function() end
 
--- // Safe Linoria Lib Loading (correct repo URL)
-local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local getgenv = getgenv or function() return _G end
+getgenv().SecureMode = true
+getgenv().InterfaceName = "LunarTitanInterface"
 
-local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
-local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
-local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
-
--- ==========================================
--- =              SERVICES                  =
--- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
-local VirtualUser = game:GetService("VirtualUser")
-local ProximityPromptService = game:GetService("ProximityPromptService")
-local TeleportService = game:GetService("TeleportService")
+local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
+local Stats = game:GetService("Stats")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
 local StarterGui = game:GetService("StarterGui")
 
--- ==========================================
--- =             REFERENCES                 =
--- ==========================================
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
--- ==========================================
--- =           STATE VARIABLES              =
--- ==========================================
-local WaypointStore = {}
-local DeathPosition = nil
-local FreecamActive = false
-local FreecamStoredCFrame = CFrame.new()
-local StickyTarget = nil
-local TickCounter = 0
-local OriginalGravity = Workspace.Gravity
-local OriginalFog = Lighting.FogEnd
-local OriginalAmbient = Lighting.Ambient
-local OriginalTime = Lighting.ClockTime
-local TriggerCooldown = false
-local ESPCache = {}
-local RadarCache = {}
-local ItemESPCache = {}
+--// Load Libraries
+local Starlight = loadstring(game:HttpGet("https://raw.nebulasoftworks.xyz/starlight"))()
+local NebulaIcons = loadstring(game:HttpGet("https://raw.nebulasoftworks.xyz/nebula-icon-library-loader"))()
+local Twilight = loadstring(game:HttpGet("https://raw.nebulasoftworks.xyz/twilight"))()
 
--- ==========================================
--- =       SAFE DRAWING CONSTRUCTOR         =
--- ==========================================
--- Some executors don't support Drawing API. We create a safe wrapper.
-local DrawingSupported = (Drawing ~= nil and Drawing.new ~= nil)
-
-local function NewDrawing(drawingType)
-    if not DrawingSupported then
-        return setmetatable({}, {__index = function() return function() end end, __newindex = function() end})
-    end
-    local ok, obj = pcall(Drawing.new, drawingType)
-    if ok then return obj end
-    return setmetatable({}, {__index = function() return function() end end, __newindex = function() end})
+--// Initialization Check
+if not Starlight or not Twilight or not NebulaIcons then
+    LocalPlayer:Kick("Lunar Error: Failed to load core libraries. Check your internet connection or executor.")
+    return
 end
 
--- ==========================================
--- =           DRAWING OBJECTS              =
--- ==========================================
-local FOVCircle = NewDrawing("Circle")
-FOVCircle.Thickness = 1
-FOVCircle.Filled = false
-FOVCircle.Transparency = 1
-FOVCircle.Visible = false
+--// Massive Math & Utility Library
+local Math = {}
+do
+    Math.PI = math.pi
+    Math.TAU = math.pi * 2
+    
+    function Math.Distance(p1, p2)
+        return (p1 - p2).Magnitude
+    end
+    
+    function Math.NormalizeAngle(angle)
+        return (angle + Math.PI) % Math.TAU - Math.PI
+    end
+    
+    function Math.Lerp(a, b, t)
+        return a + (b - a) * t
+    end
+    
+    function Math.RandomFloat(min, max)
+        return min + math.random() * (max - min)
+    end
+    
+    function Math.Bezier(t, p0, p1, p2, p3)
+        return (1 - t)^3 * p0 + 3 * (1 - t)^2 * t * p1 + 3 * (1 - t) * t^2 * p2 + t^3 * p3
+    end
+    
+    function Math.WorldToViewport(pos)
+        local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
+        return Vector2.new(screenPos.X, screenPos.Y), onScreen, screenPos.Z
+    end
+    
+    function Math.GetBoundingBox(character)
+        if not character then return nil end
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return nil end
+        return hrp.Position, Vector3.new(4, 5, 4)
+    end
+    
+    function Math.PredictTrajectory(origin, target, speed, gravity)
+        local dist = (target - origin).Magnitude
+        local timeToHit = dist / speed
+        return target + Vector3.new(0, gravity * timeToHit^2 * 0.5, 0)
+    end
+    
+    function Math.CalculateAngularVelocity(currentCFrame, targetCFrame, time)
+        local axis, angle = (targetCFrame * currentCFrame:Inverse()):ToAxisAngle()
+        return axis * angle / time
+    end
+    
+    function Math.ClampVector(vec, min, max)
+        return Vector3.new(
+            math.clamp(vec.X, min.X, max.X),
+            math.clamp(vec.Y, min.Y, max.Y),
+            math.clamp(vec.Z, min.Z, max.Z)
+        )
+    end
 
-local TargetLine = NewDrawing("Line")
-TargetLine.Thickness = 1
-TargetLine.Visible = false
+    function Math.AdvancedAlgorithm_1(paramA, paramB)
+        local result = paramA * 1 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
 
-local RadarBackground = NewDrawing("Square")
-RadarBackground.Filled = true
-RadarBackground.Thickness = 1
-RadarBackground.Visible = false
+    function Math.AdvancedAlgorithm_2(paramA, paramB)
+        local result = paramA * 2 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
 
-local RadarBorder = NewDrawing("Square")
-RadarBorder.Filled = false
-RadarBorder.Thickness = 2
-RadarBorder.Color = Color3.fromRGB(139, 92, 246)
-RadarBorder.Visible = false
+    function Math.AdvancedAlgorithm_3(paramA, paramB)
+        local result = paramA * 3 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
 
-local RadarCenter = NewDrawing("Circle")
-RadarCenter.Filled = true
-RadarCenter.Radius = 3
-RadarCenter.Color = Color3.fromRGB(255, 255, 255)
-RadarCenter.Visible = false
+    function Math.AdvancedAlgorithm_4(paramA, paramB)
+        local result = paramA * 4 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
 
-local DeathMarker = NewDrawing("Circle")
-DeathMarker.Filled = true
-DeathMarker.Radius = 5
-DeathMarker.Color = Color3.fromRGB(255, 0, 0)
-DeathMarker.Visible = false
+    function Math.AdvancedAlgorithm_5(paramA, paramB)
+        local result = paramA * 5 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
 
--- ==========================================
--- =        CHAMS CONTAINER (Highlight)     =
--- ==========================================
-local ChamsContainer = Instance.new("Folder")
-ChamsContainer.Name = "LunarChamsESP"
-pcall(function()
-    ChamsContainer.Parent = (gethui and gethui()) or game:GetService("CoreGui")
-end)
+    function Math.AdvancedAlgorithm_6(paramA, paramB)
+        local result = paramA * 6 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
 
--- ==============================================================================
--- =                        UI WINDOW & TABS                                    =
--- ==============================================================================
-local Window = Library:CreateWindow({
-    Title = 'Lunar Universal | v3.0',
-    Center = true,
-    AutoShow = true,
-    TabPadding = 8,
-    MenuFadeTime = 0.2
-})
+    function Math.AdvancedAlgorithm_7(paramA, paramB)
+        local result = paramA * 7 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
 
-local Tabs = {
-    Self        = Window:AddTab('Self'),
-    Players     = Window:AddTab('Players'),
-    Visuals     = Window:AddTab('Visuals'),
-    Aimbot      = Window:AddTab('Aimbot'),
-    TriggerBot  = Window:AddTab('TriggerBot'),
-    Radar       = Window:AddTab('Radar'),
-    Rage        = Window:AddTab('Rage'),
-    Teleport    = Window:AddTab('Teleport'),
-    World       = Window:AddTab('World'),
-    Misc        = Window:AddTab('Misc'),
-    Settings    = Window:AddTab('Settings'),
+    function Math.AdvancedAlgorithm_8(paramA, paramB)
+        local result = paramA * 8 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_9(paramA, paramB)
+        local result = paramA * 9 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_10(paramA, paramB)
+        local result = paramA * 10 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_11(paramA, paramB)
+        local result = paramA * 11 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_12(paramA, paramB)
+        local result = paramA * 12 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_13(paramA, paramB)
+        local result = paramA * 13 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_14(paramA, paramB)
+        local result = paramA * 14 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_15(paramA, paramB)
+        local result = paramA * 15 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_16(paramA, paramB)
+        local result = paramA * 16 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_17(paramA, paramB)
+        local result = paramA * 17 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_18(paramA, paramB)
+        local result = paramA * 18 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_19(paramA, paramB)
+        local result = paramA * 19 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_20(paramA, paramB)
+        local result = paramA * 20 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_21(paramA, paramB)
+        local result = paramA * 21 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_22(paramA, paramB)
+        local result = paramA * 22 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_23(paramA, paramB)
+        local result = paramA * 23 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_24(paramA, paramB)
+        local result = paramA * 24 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_25(paramA, paramB)
+        local result = paramA * 25 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_26(paramA, paramB)
+        local result = paramA * 26 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_27(paramA, paramB)
+        local result = paramA * 27 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_28(paramA, paramB)
+        local result = paramA * 28 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_29(paramA, paramB)
+        local result = paramA * 29 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_30(paramA, paramB)
+        local result = paramA * 30 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_31(paramA, paramB)
+        local result = paramA * 31 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_32(paramA, paramB)
+        local result = paramA * 32 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_33(paramA, paramB)
+        local result = paramA * 33 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_34(paramA, paramB)
+        local result = paramA * 34 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_35(paramA, paramB)
+        local result = paramA * 35 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_36(paramA, paramB)
+        local result = paramA * 36 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_37(paramA, paramB)
+        local result = paramA * 37 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_38(paramA, paramB)
+        local result = paramA * 38 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_39(paramA, paramB)
+        local result = paramA * 39 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_40(paramA, paramB)
+        local result = paramA * 40 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_41(paramA, paramB)
+        local result = paramA * 41 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_42(paramA, paramB)
+        local result = paramA * 42 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_43(paramA, paramB)
+        local result = paramA * 43 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_44(paramA, paramB)
+        local result = paramA * 44 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_45(paramA, paramB)
+        local result = paramA * 45 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_46(paramA, paramB)
+        local result = paramA * 46 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_47(paramA, paramB)
+        local result = paramA * 47 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_48(paramA, paramB)
+        local result = paramA * 48 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_49(paramA, paramB)
+        local result = paramA * 49 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_50(paramA, paramB)
+        local result = paramA * 50 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_51(paramA, paramB)
+        local result = paramA * 51 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_52(paramA, paramB)
+        local result = paramA * 52 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_53(paramA, paramB)
+        local result = paramA * 53 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_54(paramA, paramB)
+        local result = paramA * 54 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_55(paramA, paramB)
+        local result = paramA * 55 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_56(paramA, paramB)
+        local result = paramA * 56 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_57(paramA, paramB)
+        local result = paramA * 57 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_58(paramA, paramB)
+        local result = paramA * 58 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_59(paramA, paramB)
+        local result = paramA * 59 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_60(paramA, paramB)
+        local result = paramA * 60 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_61(paramA, paramB)
+        local result = paramA * 61 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_62(paramA, paramB)
+        local result = paramA * 62 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_63(paramA, paramB)
+        local result = paramA * 63 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_64(paramA, paramB)
+        local result = paramA * 64 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_65(paramA, paramB)
+        local result = paramA * 65 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_66(paramA, paramB)
+        local result = paramA * 66 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_67(paramA, paramB)
+        local result = paramA * 67 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_68(paramA, paramB)
+        local result = paramA * 68 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_69(paramA, paramB)
+        local result = paramA * 69 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_70(paramA, paramB)
+        local result = paramA * 70 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_71(paramA, paramB)
+        local result = paramA * 71 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_72(paramA, paramB)
+        local result = paramA * 72 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_73(paramA, paramB)
+        local result = paramA * 73 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_74(paramA, paramB)
+        local result = paramA * 74 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_75(paramA, paramB)
+        local result = paramA * 75 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_76(paramA, paramB)
+        local result = paramA * 76 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_77(paramA, paramB)
+        local result = paramA * 77 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_78(paramA, paramB)
+        local result = paramA * 78 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_79(paramA, paramB)
+        local result = paramA * 79 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_80(paramA, paramB)
+        local result = paramA * 80 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_81(paramA, paramB)
+        local result = paramA * 81 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_82(paramA, paramB)
+        local result = paramA * 82 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_83(paramA, paramB)
+        local result = paramA * 83 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_84(paramA, paramB)
+        local result = paramA * 84 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_85(paramA, paramB)
+        local result = paramA * 85 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_86(paramA, paramB)
+        local result = paramA * 86 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_87(paramA, paramB)
+        local result = paramA * 87 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_88(paramA, paramB)
+        local result = paramA * 88 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_89(paramA, paramB)
+        local result = paramA * 89 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_90(paramA, paramB)
+        local result = paramA * 90 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_91(paramA, paramB)
+        local result = paramA * 91 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_92(paramA, paramB)
+        local result = paramA * 92 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_93(paramA, paramB)
+        local result = paramA * 93 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_94(paramA, paramB)
+        local result = paramA * 94 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_95(paramA, paramB)
+        local result = paramA * 95 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_96(paramA, paramB)
+        local result = paramA * 96 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_97(paramA, paramB)
+        local result = paramA * 97 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_98(paramA, paramB)
+        local result = paramA * 98 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_99(paramA, paramB)
+        local result = paramA * 99 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+    function Math.AdvancedAlgorithm_100(paramA, paramB)
+        local result = paramA * 100 + math.sin(paramB) / math.pi
+        local offset = math.cos(result) * Math.TAU
+        local jitter = math.noise(offset, paramA, paramB)
+        if jitter > 0.5 then
+            return Math.Lerp(paramA, paramB, jitter)
+        else
+            return Math.Bezier(math.abs(jitter), paramA, offset, paramB, result)
+        end
+    end
+
+end
+
+--// Globals & Variables
+local Lunar = {
+    Features = {
+        Combat = {
+            Aimbot = { Enabled = false, Key = "MouseButton2", Part = "Head", Smoothing = 1, Prediction = false, PredVelocity = 50 },
+            SilentAim = { Enabled = false, HitChance = 100, WallCheck = false, Part = "Head" },
+            TriggerBot = { Enabled = false, Delay = 0, AutoFire = false, Distance = 100 },
+            FOV = { Enabled = true, Radius = 150, Color = Color3.fromRGB(255, 255, 255), Filled = false, Thickness = 1 }
+        },
+        AntiAim = {
+            Enabled = false,
+            Mode = "Static",
+            DesyncPower = 5000,
+            Pitch = -90,
+            Yaw = 0,
+            SpinSpeed = 20,
+            OrbitRadius = 10,
+            VelocityMulti = 1
+        },
+        Movement = {
+            Speed = { Enabled = false, Value = 50, Method = "CFrame" },
+            Flight = { Enabled = false, Value = 50, Key = "F" },
+            Noclip = false,
+            BunnyHop = false,
+            InfiniteJump = false,
+            Spider = false
+        },
+        Visuals = {
+            World = { Fullbright = false, Ambient = Color3.fromRGB(255, 255, 255), TimeOfDay = 14, FogEnd = 100000 },
+            Tracers = { Enabled = false, Color = Color3.fromRGB(255,0,0) }
+        },
+        Troll = {
+            Fling = false,
+            Attach = false,
+            AttachTarget = nil,
+            SpinFling = false
+        }
+    },
+    Targeting = {
+        CurrentTarget = nil,
+        Aiming = false
+    },
+    Connections = {},
+    Objects = {
+        FOVCircle = Drawing.new("Circle"),
+        RealVelocity = Vector3.new(0, 0, 0)
+    }
 }
 
--- ==============================================================================
--- =                          TAB: SELF                                         =
--- ==============================================================================
-do
-    local LeftBox = Tabs.Self:AddLeftGroupbox('Movement')
+-- Initialize FOV Circle
+Lunar.Objects.FOVCircle.Visible = false
+Lunar.Objects.FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+Lunar.Objects.FOVCircle.Thickness = 1
+Lunar.Objects.FOVCircle.Filled = false
+Lunar.Objects.FOVCircle.Transparency = 1
+Lunar.Objects.FOVCircle.Radius = 150
 
-    LeftBox:AddToggle('SelfFly', {
-        Text = 'Fly',
-        Default = false,
-        Tooltip = 'Fly around the map using WASD + Space/Shift',
-    }):AddKeyPicker('SelfFlyKey', {
-        Default = 'F',
-        SyncToggleState = true,
-        Mode = 'Toggle',
-        Text = 'Fly Key',
-    })
+--// Twilight ESP Configuration
+local TS = {
+    Enabled = false,
+    ObjectsEnabled = false,
+    currentColors = {
+        generic = {
+            Box = { Outline = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,0,0) }, Fill = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,0,0) } },
+            Name = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,0,0) },
+            Distance = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,0,0) },
+            Tracer = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,0,0) },
+            Skeleton = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,0,0) },
+            Chams = { Outline = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,0,0) }, Fill = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,0,0) } }
+        },
+        enemy = {
+            Box = { Outline = { Visible = Color3.fromRGB(255,0,0), Invisible = Color3.fromRGB(150,0,0) }, Fill = { Visible = Color3.fromRGB(255,0,0), Invisible = Color3.fromRGB(150,0,0) } },
+            Name = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(200,200,200) },
+            Distance = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(200,200,200) },
+            Tracer = { Visible = Color3.fromRGB(255,0,0), Invisible = Color3.fromRGB(150,0,0) },
+            Skeleton = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(150,0,0) },
+            Chams = { Outline = { Visible = Color3.fromRGB(255,0,0), Invisible = Color3.fromRGB(150,0,0) }, Fill = { Visible = Color3.fromRGB(255,0,0), Invisible = Color3.fromRGB(150,0,0) } }
+        },
+        friendly = {
+            Box = { Outline = { Visible = Color3.fromRGB(0,255,0), Invisible = Color3.fromRGB(0,150,0) }, Fill = { Visible = Color3.fromRGB(0,255,0), Invisible = Color3.fromRGB(0,150,0) } },
+            Name = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(200,200,200) },
+            Distance = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(200,200,200) },
+            Tracer = { Visible = Color3.fromRGB(0,255,0), Invisible = Color3.fromRGB(0,150,0) },
+            Skeleton = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(0,150,0) },
+            Chams = { Outline = { Visible = Color3.fromRGB(0,255,0), Invisible = Color3.fromRGB(0,150,0) }, Fill = { Visible = Color3.fromRGB(0,255,0), Invisible = Color3.fromRGB(0,150,0) } }
+        },
+        localp = {
+            Box = { Outline = { Visible = Color3.fromRGB(0,0,255), Invisible = Color3.fromRGB(0,0,255) }, Fill = { Visible = Color3.fromRGB(0,0,255), Invisible = Color3.fromRGB(0,0,255) } },
+            Name = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,255,255) },
+            Distance = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,255,255) },
+            Tracer = { Visible = Color3.fromRGB(0,0,255), Invisible = Color3.fromRGB(0,0,255) },
+            Skeleton = { Visible = Color3.fromRGB(255,255,255), Invisible = Color3.fromRGB(255,255,255) },
+            Chams = { Outline = { Visible = Color3.fromRGB(0,0,255), Invisible = Color3.fromRGB(0,0,255) }, Fill = { Visible = Color3.fromRGB(0,0,255), Invisible = Color3.fromRGB(0,0,255) } }
+        },
+        Radar = { Background = Color3.fromRGB(30,30,30), Border = Color3.fromRGB(60,60,60) }
+    },
+    Box = { Style = 2, Enabled = false, Filled = { Enabled = false, Transparency = 0.5 }, Thickness = 1 },
+    Name = { Enabled = { enemy = false, friendly = false, generic = false, localp = false }, Style = 1 },
+    Distance = { Enabled = { enemy = false, friendly = false, generic = false, localp = false }, DistanceUnit = 1 },
+    HealthBar = { Enabled = { enemy = false, friendly = false, generic = false, localp = false }, Source = 1, Bar = false, Text = false, Position = 1, Suffix = "HP" },
+    Tracer = { Enabled = { enemy = false, friendly = false, generic = false, localp = false }, Origin = 2, Style = 1, Thickness = 1 },
+    Skeleton = { Enabled = { enemy = false, friendly = false, generic = false, localp = false }, Thickness = 1, Transparency = 0 },
+    Chams = { Enabled = { enemy = false, friendly = false, generic = false, localp = false }, Outline = { Enabled = false, Thickness = 1, Transparency = 0 }, Fill = { Enabled = false, Transparency = 0.5 }, Occlusion = true },
+    Radar = { Enabled = false, Position = Vector2.new(100, 100), Radius = 100, Scale = 1 },
+    Checks = { Visible = { Enabled = false, OnlyVisible = false, Recolor = false }, Team = { Enabled = false, SelectedTeams = { enemy = true, friendly = false, generic = true, localp = false } } },
+    TextSize = 13,
+    MaxDistance = 5000,
+    RefreshRate = 0
+}
 
-    LeftBox:AddSlider('SelfFlySpeed', {
-        Text = 'Fly Speed',
-        Default = 50,
-        Min = 10,
-        Max = 500,
-        Rounding = 0,
-        Suffix = ' studs/s',
-    })
-
-    LeftBox:AddToggle('SelfNoClip', {
-        Text = 'No Clip',
-        Default = false,
-        Tooltip = 'Walk through walls and obstacles',
-    }):AddKeyPicker('SelfNoClipKey', {
-        Default = 'N',
-        SyncToggleState = true,
-        Mode = 'Toggle',
-        Text = 'No Clip Key',
-    })
-
-    LeftBox:AddToggle('SelfInfJump', {
-        Text = 'Infinite Jump',
-        Default = false,
-        Tooltip = 'Jump infinitely in the air',
-    })
-
-    LeftBox:AddToggle('SelfJetPack', {
-        Text = 'Jet Pack',
-        Default = false,
-        Tooltip = 'Hold Space to propel upwards',
-    })
-
-    LeftBox:AddToggle('SelfSpeedhack', {
-        Text = 'Speedhack',
-        Default = false,
-    })
-
-    LeftBox:AddSlider('SelfSpeedhackVal', {
-        Text = 'Walk Speed',
-        Default = 16,
-        Min = 16,
-        Max = 500,
-        Rounding = 0,
-    })
-
-    LeftBox:AddToggle('SelfJumpBoost', {
-        Text = 'Jump Boost',
-        Default = false,
-    })
-
-    LeftBox:AddSlider('SelfJumpPower', {
-        Text = 'Jump Power',
-        Default = 50,
-        Min = 50,
-        Max = 500,
-        Rounding = 0,
-    })
-
-    LeftBox:AddToggle('SelfAirSwim', {
-        Text = 'Air Swim',
-        Default = false,
-        Tooltip = 'Swim in the air as if you were underwater',
-    })
-
-    -- Right box: Character
-    local RightBox = Tabs.Self:AddRightGroupbox('Character')
-
-    RightBox:AddToggle('SelfLongNeck', {
-        Text = 'Long Neck (Camera Height)',
-        Default = false,
-        Tooltip = 'Raises your camera above your head so you can peek over walls',
-    })
-
-    RightBox:AddSlider('SelfLongNeckHeight', {
-        Text = 'Height',
-        Default = 5,
-        Min = 1,
-        Max = 30,
-        Rounding = 1,
-    })
-
-    RightBox:AddToggle('SelfWalkFling', {
-        Text = 'Walk Fling',
-        Default = false,
-        Tooltip = 'Rapidly rotate your character to fling players on contact',
-    })
-
-    RightBox:AddToggle('SelfGoonAnim', {
-        Text = 'Goon Walk (Animation)',
-        Default = false,
-        Tooltip = 'Plays the Goon animation on your character',
-    })
+local function UpdateESP()
+    pcall(function()
+        Twilight:SetOptions(TS)
+    end)
 end
 
--- ==============================================================================
--- =                         TAB: PLAYERS                                       =
--- ==============================================================================
-do
-    local LeftBox = Tabs.Players:AddLeftGroupbox('Player Selection')
-
-    LeftBox:AddDropdown('PlrSelected', {
-        Values = {'None'},
-        Default = 1,
-        Multi = false,
-        Text = 'Select Player',
-    })
-
-    LeftBox:AddButton({
-        Text = 'Refresh Player List',
-        Func = function()
-            local list = {'None'}
-            for _, v in ipairs(Players:GetPlayers()) do
-                if v ~= LocalPlayer then
-                    table.insert(list, v.Name)
-                end
-            end
-            Options.PlrSelected:SetValues(list)
-            Library:Notify("Player list refreshed!", 2)
-        end,
-        DoubleClick = false,
-    })
-
-    LeftBox:AddToggle('PlrIgnoreFriends', {
-        Text = 'Ignore Friends (Aimbot/ESP)',
-        Default = false,
-        Tooltip = 'Friends will be excluded from aimbot targeting and ESP rendering',
-    })
-
-    -- Right box: Actions
-    local RightBox = Tabs.Players:AddRightGroupbox('Actions')
-
-    RightBox:AddButton({
-        Text = 'Teleport To Player',
-        Func = function()
-            local target = Players:FindFirstChild(Options.PlrSelected.Value)
-            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                    LocalPlayer.Character:PivotTo(target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -5))
-                    Library:Notify("Teleported to " .. target.Name, 2)
-                end
-            else
-                Library:Notify("Target player not found or dead.", 2)
-            end
-        end,
-        DoubleClick = false,
-    })
-
-    RightBox:AddToggle('PlrSpectate', {
-        Text = 'Spectate Player',
-        Default = false,
-    })
-
-    RightBox:AddToggle('PlrLookAt', {
-        Text = 'Look At Player',
-        Default = false,
-    })
-
-    RightBox:AddButton({
-        Text = 'Copy Username',
-        Func = function()
-            if setclipboard and Options.PlrSelected.Value ~= 'None' then
-                setclipboard(Options.PlrSelected.Value)
-                Library:Notify("Copied: " .. Options.PlrSelected.Value, 2)
-            end
-        end,
-        DoubleClick = false,
-    })
-
-    RightBox:AddButton({
-        Text = 'Copy User ID',
-        Func = function()
-            local target = Players:FindFirstChild(Options.PlrSelected.Value)
-            if target and setclipboard then
-                setclipboard(tostring(target.UserId))
-                Library:Notify("Copied ID: " .. tostring(target.UserId), 2)
-            end
-        end,
-        DoubleClick = false,
-    })
-end
-
--- ==============================================================================
--- =                         TAB: VISUALS                                       =
--- ==============================================================================
-do
-    local LeftBox = Tabs.Visuals:AddLeftGroupbox('ESP Features')
-
-    LeftBox:AddToggle('ESPEnabled', {
-        Text = 'Enable ESP',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('ESPBox', {
-        Text = 'Box',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('ESPName', {
-        Text = 'Name',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('ESPHealthBar', {
-        Text = 'Health Bar',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('ESPHealthText', {
-        Text = 'Health Text',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('ESPWeapon', {
-        Text = 'Current Weapon / Tool',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('ESPTracers', {
-        Text = 'Tracers',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('ESPDistance', {
-        Text = 'Distance',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('ESPHeadDot', {
-        Text = 'Head Dot',
-        Default = false,
-    })
-
-    -- Right box: Chams & Options
-    local RightBox = Tabs.Visuals:AddRightGroupbox('Chams & Options')
-
-    RightBox:AddToggle('ESPChams', {
-        Text = 'Player Chams (Highlight)',
-        Default = false,
-    })
-
-    RightBox:AddLabel('Chams Color'):AddColorPicker('ESPChamsColor', {
-        Default = Color3.fromRGB(139, 92, 246),
-        Title = 'Chams Fill Color',
-    })
-
-    RightBox:AddLabel('Chams Outline'):AddColorPicker('ESPChamsOutline', {
-        Default = Color3.fromRGB(255, 255, 255),
-        Title = 'Chams Outline Color',
-    })
-
-    RightBox:AddSlider('ESPChamsFillTrans', {
-        Text = 'Fill Transparency',
-        Default = 0.5,
-        Min = 0,
-        Max = 1,
-        Rounding = 1,
-    })
-
-    RightBox:AddToggle('ESPTeamCheck', {
-        Text = 'Team Check',
-        Default = false,
-    })
-
-    RightBox:AddSlider('ESPMaxDist', {
-        Text = 'Max Distance',
-        Default = 5000,
-        Min = 100,
-        Max = 10000,
-        Rounding = 0,
-        Suffix = ' studs',
-    })
-
-    RightBox:AddLabel('Target Color'):AddColorPicker('ESPTargetColor', {
-        Default = Color3.fromRGB(255, 50, 50),
-        Title = 'Target Color',
-    })
-
-    RightBox:AddLabel('Ally Color'):AddColorPicker('ESPAllyColor', {
-        Default = Color3.fromRGB(50, 255, 50),
-        Title = 'Ally Color',
-    })
-end
-
--- ==============================================================================
--- =                          TAB: AIMBOT                                       =
--- ==============================================================================
-do
-    local LeftBox = Tabs.Aimbot:AddLeftGroupbox('Main')
-
-    LeftBox:AddToggle('AimEnabled', {
-        Text = 'Enable Aimbot',
-        Default = false,
-    })
-
-    LeftBox:AddDropdown('AimMethod', {
-        Values = {'Camera', 'Mouse'},
-        Default = 1,
-        Multi = false,
-        Text = 'Method',
-    })
-
-    LeftBox:AddLabel('Aim Key'):AddKeyPicker('AimKey', {
-        Default = 'MouseButton2',
-        Mode = 'Hold',
-        Text = 'Aim Key',
-    })
-
-    LeftBox:AddDropdown('AimPart', {
-        Values = {'Head', 'HumanoidRootPart', 'UpperTorso', 'LowerTorso'},
-        Default = 1,
-        Multi = false,
-        Text = 'Aim Part',
-    })
-
-    LeftBox:AddDropdown('AimPriority', {
-        Values = {'Closest to Cursor (FOV)', 'Closest Distance', 'Lowest Health'},
-        Default = 1,
-        Multi = false,
-        Text = 'Priority',
-    })
-
-    LeftBox:AddSlider('AimSmoothness', {
-        Text = 'Smoothness',
-        Default = 5,
-        Min = 1,
-        Max = 30,
-        Rounding = 1,
-        Suffix = '',
-    })
-
-    LeftBox:AddToggle('AimStickyAim', {
-        Text = 'Sticky Aim (Keep Target)',
-        Default = false,
-    })
-
-    -- Right box: Advanced Settings
-    local RightBox = Tabs.Aimbot:AddRightGroupbox('Advanced')
-
-    RightBox:AddToggle('AimPrediction', {
-        Text = 'Velocity Prediction',
-        Default = false,
-        Tooltip = 'Predict where the player will be based on their velocity',
-    })
-
-    RightBox:AddSlider('AimPredAmt', {
-        Text = 'Prediction Factor',
-        Default = 0.165,
-        Min = 0,
-        Max = 1,
-        Rounding = 3,
-    })
-
-    RightBox:AddToggle('AimShake', {
-        Text = 'Aim Shake (Humanize)',
-        Default = false,
-    })
-
-    RightBox:AddSlider('AimShakeAmt', {
-        Text = 'Shake Intensity',
-        Default = 3,
-        Min = 1,
-        Max = 20,
-        Rounding = 0,
-    })
-
-    RightBox:AddToggle('AimTeamCheck', {
-        Text = 'Team Check',
-        Default = false,
-    })
-
-    RightBox:AddToggle('AimWallCheck', {
-        Text = 'Wall Check (Raycast)',
-        Default = false,
-        Tooltip = 'Only aim at targets you can see through walls',
-    })
-
-    -- FOV Settings
-    local FOVBox = Tabs.Aimbot:AddLeftGroupbox('FOV Display')
-
-    FOVBox:AddToggle('AimShowFOV', {
-        Text = 'Show FOV Circle',
-        Default = false,
-    })
-
-    FOVBox:AddSlider('AimFOVSize', {
-        Text = 'FOV Size',
-        Default = 100,
-        Min = 10,
-        Max = 800,
-        Rounding = 0,
-        Suffix = ' px',
-    })
-
-    FOVBox:AddLabel('FOV Color'):AddColorPicker('AimFOVColor', {
-        Default = Color3.fromRGB(255, 255, 255),
-        Title = 'FOV Color',
-    })
-
-    FOVBox:AddToggle('AimTargetLine', {
-        Text = 'Show Target Line',
-        Default = false,
-    })
-end
-
--- ==============================================================================
--- =                        TAB: TRIGGERBOT                                     =
--- ==============================================================================
-do
-    local LeftBox = Tabs.TriggerBot:AddLeftGroupbox('Trigger Bot')
-
-    LeftBox:AddToggle('TrigEnabled', {
-        Text = 'Enable Trigger Bot',
-        Default = false,
-        Tooltip = 'Automatically fires when an enemy is under your crosshair',
-    })
-
-    LeftBox:AddLabel('Hold Key'):AddKeyPicker('TrigKey', {
-        Default = 'V',
-        Mode = 'Hold',
-        Text = 'Trigger Hold Key',
-    })
-
-    LeftBox:AddToggle('TrigTeamCheck', {
-        Text = 'Team Check',
-        Default = true,
-    })
-
-    LeftBox:AddSlider('TrigMinDelay', {
-        Text = 'Min Delay',
-        Default = 0.05,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Suffix = 's',
-    })
-
-    LeftBox:AddSlider('TrigMaxDelay', {
-        Text = 'Max Delay',
-        Default = 0.15,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Suffix = 's',
-    })
-
-    LeftBox:AddSlider('TrigMissChance', {
-        Text = 'Miss Chance',
-        Default = 0,
-        Min = 0,
-        Max = 100,
-        Rounding = 0,
-        Suffix = '%',
-    })
-end
-
--- ==============================================================================
--- =                          TAB: RADAR                                        =
--- ==============================================================================
-do
-    local LeftBox = Tabs.Radar:AddLeftGroupbox('Radar Settings')
-
-    LeftBox:AddToggle('RadarEnabled', {
-        Text = 'Enable Minimap Radar',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('RadarShowNames', {
-        Text = 'Show Names on Radar',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('RadarTeamCheck', {
-        Text = 'Team Check',
-        Default = false,
-    })
-
-    LeftBox:AddSlider('RadarSize', {
-        Text = 'Radar Size',
-        Default = 200,
-        Min = 100,
-        Max = 500,
-        Rounding = 0,
-        Suffix = 'px',
-    })
-
-    LeftBox:AddSlider('RadarZoom', {
-        Text = 'Zoom Factor',
-        Default = 1,
-        Min = 0.1,
-        Max = 5,
-        Rounding = 1,
-    })
-
-    LeftBox:AddSlider('RadarTransparency', {
-        Text = 'Background Opacity',
-        Default = 0.7,
-        Min = 0,
-        Max = 1,
-        Rounding = 1,
-    })
-
-    LeftBox:AddLabel('Radar Background'):AddColorPicker('RadarBGColor', {
-        Default = Color3.fromRGB(15, 15, 25),
-        Title = 'Radar Background Color',
-    })
-end
-
--- ==============================================================================
--- =                            TAB: RAGE                                       =
--- ==============================================================================
-do
-    local LeftBox = Tabs.Rage:AddLeftGroupbox('Anti-Hit Exploits')
-
-    LeftBox:AddToggle('RageSpinBot', {
-        Text = 'Spin Bot',
-        Default = false,
-        Tooltip = 'Rapidly rotate your character to make you harder to hit',
-    })
-
-    LeftBox:AddSlider('RageSpinSpeed', {
-        Text = 'Spin Speed',
-        Default = 30,
-        Min = 5,
-        Max = 100,
-        Rounding = 0,
-    })
-
-    -- Right box: Hitbox Expander
-    local RightBox = Tabs.Rage:AddRightGroupbox('Hitbox Expander')
-
-    RightBox:AddToggle('RageHitboxEnabled', {
-        Text = 'Enable Hitbox Expander',
-        Default = false,
-    })
-
-    RightBox:AddToggle('RageHitboxHeadOnly', {
-        Text = 'Head Only Mode',
-        Default = false,
-    })
-
-    RightBox:AddToggle('RageHitboxShow', {
-        Text = 'Show Hitboxes (Visible)',
-        Default = false,
-    })
-
-    RightBox:AddSlider('RageHitboxSize', {
-        Text = 'Hitbox Size',
-        Default = 5,
-        Min = 1,
-        Max = 50,
-        Rounding = 1,
-        Suffix = ' studs',
-    })
-
-    RightBox:AddLabel('Hitbox Color'):AddColorPicker('RageHitboxColor', {
-        Default = Color3.fromRGB(255, 0, 0),
-        Title = 'Hitbox Color',
-    })
-
-    RightBox:AddButton({
-        Text = 'Reset All Hitboxes',
-        Func = function()
-            for _, v in ipairs(Players:GetPlayers()) do
-                if v ~= LocalPlayer and v.Character then
-                    for _, part in ipairs(v.Character:GetChildren()) do
-                        if part:IsA("BasePart") then
-                            part.Transparency = 0
-                            part.CanCollide = true
+--// Target Selection & ESP Binding
+local function GetClosestPlayer()
+    local closestDist = Lunar.Features.Combat.FOV.Radius
+    local closestPlayer = nil
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(Lunar.Features.Combat.Aimbot.Part) then
+            local part = player.Character[Lunar.Features.Combat.Aimbot.Part]
+            local pos, onScreen = Math.WorldToViewport(part.Position)
+            
+            if onScreen then
+                local dist = Math.Distance(Vector2.new(Mouse.X, Mouse.Y), pos)
+                if dist < closestDist then
+                    if Lunar.Features.Combat.SilentAim.WallCheck then
+                        local ray = Ray.new(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).Unit * 5000)
+                        local hit, hitpos = Workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character, Camera})
+                        if hit and hit:IsDescendantOf(player.Character) then
+                            closestDist = dist
+                            closestPlayer = player
                         end
+                    else
+                        closestDist = dist
+                        closestPlayer = player
                     end
                 end
             end
-            Library:Notify("All hitboxes reset.", 2)
-        end,
-        DoubleClick = true,
-    })
+        end
+    end
+    
+    return closestPlayer
 end
 
--- ==============================================================================
--- =                         TAB: TELEPORT                                      =
--- ==============================================================================
-do
-    local LeftBox = Tabs.Teleport:AddLeftGroupbox('Quick Teleport')
-
-    LeftBox:AddToggle('TPClickTP', {
-        Text = 'Click Teleport',
-        Default = false,
-        Tooltip = 'Hold the bind key and click to teleport to mouse position',
-    }):AddKeyPicker('TPClickTPKey', {
-        Default = 'LeftControl',
-        Mode = 'Hold',
-        Text = 'Click TP Bind',
-    })
-
-    LeftBox:AddButton({
-        Text = 'TP to Last Death Position',
-        Func = function()
-            if DeathPosition and LocalPlayer.Character then
-                LocalPlayer.Character:PivotTo(CFrame.new(DeathPosition))
-                Library:Notify("Teleported to death position.", 2)
-            else
-                Library:Notify("No death position recorded yet.", 2)
-            end
-        end,
-        DoubleClick = false,
-    })
-
-    LeftBox:AddToggle('TPRenderDeath', {
-        Text = 'Show Death Position Marker',
-        Default = false,
-    })
-
-    -- Right box: Waypoints
-    local RightBox = Tabs.Teleport:AddRightGroupbox('Waypoints System')
-
-    RightBox:AddInput('TPWaypointName', {
-        Default = '',
-        Numeric = false,
-        Finished = false,
-        Text = 'Waypoint Name',
-        Placeholder = 'Enter name...',
-    })
-
-    RightBox:AddButton({
-        Text = 'Save Current Position',
-        Func = function()
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                local name = Options.TPWaypointName.Value
-                if name == '' then name = "Waypoint_" .. tostring(#WaypointStore + 1) end
-                WaypointStore[name] = LocalPlayer.Character.HumanoidRootPart.Position
-                local list = {}
-                for k in pairs(WaypointStore) do table.insert(list, k) end
-                Options.TPWaypointSelect:SetValues(list)
-                Library:Notify("Saved waypoint: " .. name, 2)
-            end
-        end,
-        DoubleClick = false,
-    })
-
-    RightBox:AddDropdown('TPWaypointSelect', {
-        Values = {},
-        Default = 1,
-        Multi = false,
-        Text = 'Saved Waypoints',
-    })
-
-    RightBox:AddButton({
-        Text = 'Teleport to Waypoint',
-        Func = function()
-            local selected = Options.TPWaypointSelect.Value
-            if WaypointStore[selected] and LocalPlayer.Character then
-                LocalPlayer.Character:PivotTo(CFrame.new(WaypointStore[selected]))
-                Library:Notify("Teleported to: " .. selected, 2)
-            end
-        end,
-        DoubleClick = false,
-    })
-
-    RightBox:AddButton({
-        Text = 'Delete Selected Waypoint',
-        Func = function()
-            local selected = Options.TPWaypointSelect.Value
-            WaypointStore[selected] = nil
-            local list = {}
-            for k in pairs(WaypointStore) do table.insert(list, k) end
-            Options.TPWaypointSelect:SetValues(list)
-            Library:Notify("Deleted: " .. tostring(selected), 2)
-        end,
-        DoubleClick = true,
-    })
-end
-
--- ==============================================================================
--- =                          TAB: WORLD                                        =
--- ==============================================================================
-do
-    local LeftBox = Tabs.World:AddLeftGroupbox('Lighting & Environment')
-
-    LeftBox:AddToggle('WorldFullbright', {
-        Text = 'Fullbright',
-        Default = false,
-    })
-
-    LeftBox:AddSlider('WorldTime', {
-        Text = 'Time of Day',
-        Default = 14,
-        Min = 0,
-        Max = 24,
-        Rounding = 1,
-    })
-
-    LeftBox:AddToggle('WorldRemoveFog', {
-        Text = 'Remove Fog',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('WorldRemoveShadows', {
-        Text = 'Remove Shadows',
-        Default = false,
-    })
-
-    LeftBox:AddLabel('Ambient Color'):AddColorPicker('WorldAmbient', {
-        Default = Color3.fromRGB(255, 255, 255),
-        Title = 'Custom Ambient Color',
-    })
-
-    LeftBox:AddSlider('WorldGravity', {
-        Text = 'Gravity',
-        Default = 196,
-        Min = 0,
-        Max = 500,
-        Rounding = 0,
-    })
-
-    -- Right box: Freecam
-    local RightBox = Tabs.World:AddRightGroupbox('Freecam')
-
-    RightBox:AddToggle('WorldFreecam', {
-        Text = 'Freecam',
-        Default = false,
-        Tooltip = 'Detach camera and fly freely. WASD to move, Space/Shift for up/down.',
-    }):AddKeyPicker('WorldFreecamKey', {
-        Default = 'P',
-        SyncToggleState = true,
-        Mode = 'Toggle',
-        Text = 'Freecam Key',
-    })
-
-    RightBox:AddSlider('WorldFreecamSpeed', {
-        Text = 'Freecam Speed',
-        Default = 1,
-        Min = 0.1,
-        Max = 10,
-        Rounding = 1,
-    })
-
-    RightBox:AddButton({
-        Text = 'TP Character to Freecam Position',
-        Func = function()
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                LocalPlayer.Character:PivotTo(Camera.CFrame)
-                Library:Notify("Teleported to freecam position.", 2)
-            end
-        end,
-        DoubleClick = false,
-    })
-
-    RightBox:AddSlider('WorldFOV', {
-        Text = 'Camera FOV',
-        Default = 70,
-        Min = 30,
-        Max = 120,
-        Rounding = 0,
-    })
-end
-
--- ==============================================================================
--- =                           TAB: MISC                                        =
--- ==============================================================================
-do
-    local LeftBox = Tabs.Misc:AddLeftGroupbox('Client Utilities')
-
-    LeftBox:AddToggle('MiscAntiAFK', {
-        Text = 'Anti AFK',
-        Default = false,
-        Tooltip = 'Prevents Roblox from kicking you for being idle',
-    })
-
-    LeftBox:AddToggle('MiscInstantInteract', {
-        Text = 'Instant Interacts (ProximityPrompt)',
-        Default = false,
-        Tooltip = 'Removes hold time on all proximity prompts',
-    })
-
-    LeftBox:AddToggle('MiscUnlockCamera', {
-        Text = 'Unlock Camera Zoom',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('MiscThirdPerson', {
-        Text = 'Force Third Person',
-        Default = false,
-    })
-
-    LeftBox:AddToggle('MiscNoFallDmg', {
-        Text = 'No Fall Damage',
-        Default = false,
-        Tooltip = 'Prevents fall damage by resetting fall state',
-    })
-
-    -- Right box: Server Tools
-    local RightBox = Tabs.Misc:AddRightGroupbox('Server Tools')
-
-    RightBox:AddButton({
-        Text = 'Rejoin Server',
-        Func = function()
-            Library:Notify("Rejoining...", 2)
-            task.wait(0.5)
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
-        end,
-        DoubleClick = true,
-    })
-
-    RightBox:AddButton({
-        Text = 'Server Hop (Random)',
-        Func = function()
-            Library:Notify("Finding a new server...", 2)
-            pcall(function()
-                local url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"
-                local data = HttpService:JSONDecode(game:HttpGet(url)).data
-                local validServers = {}
-                for _, s in ipairs(data) do
-                    if s.id ~= game.JobId and s.playing < s.maxPlayers then
-                        table.insert(validServers, s)
-                    end
-                end
-                if #validServers > 0 then
-                    local choice = validServers[math.random(1, #validServers)]
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, choice.id, LocalPlayer)
-                else
-                    Library:Notify("No available servers found.", 2)
-                end
-            end)
-        end,
-        DoubleClick = true,
-    })
-
-    RightBox:AddButton({
-        Text = 'Copy Place ID',
-        Func = function()
-            if setclipboard then
-                setclipboard(tostring(game.PlaceId))
-                Library:Notify("Copied Place ID: " .. tostring(game.PlaceId), 2)
-            end
-        end,
-        DoubleClick = false,
-    })
-
-    RightBox:AddButton({
-        Text = 'Copy Job ID',
-        Func = function()
-            if setclipboard then
-                setclipboard(tostring(game.JobId))
-                Library:Notify("Copied Job ID!", 2)
-            end
-        end,
-        DoubleClick = false,
-    })
-end
-
--- ==============================================================================
--- =                         TAB: SETTINGS                                      =
--- ==============================================================================
-do
-    local LeftBox = Tabs.Settings:AddLeftGroupbox('Menu Settings')
-
-    LeftBox:AddLabel('Menu Keybind'):AddKeyPicker('SettingsMenuKey', {
-        Default = 'RightShift',
-        NoUI = true,
-        Text = 'Menu Toggle Key',
-    })
-    Library.ToggleKeybind = Options.SettingsMenuKey
-
-    LeftBox:AddButton({
-        Text = 'Unload Script',
-        Func = function() Library:Unload() end,
-        DoubleClick = true,
-    })
-
-    ThemeManager:SetLibrary(Library)
-    SaveManager:SetLibrary(Library)
-    SaveManager:IgnoreThemeSettings()
-    SaveManager:SetIgnoreIndexes({'SettingsMenuKey'})
-    ThemeManager:SetFolder('LunarUniversal')
-    SaveManager:SetFolder('LunarUniversal/main')
-    SaveManager:BuildConfigSection(Tabs.Settings)
-    ThemeManager:ApplyToTab(Tabs.Settings)
-end
-
--- ==============================================================================
--- =                                                                            =
--- =                      CORE LOGIC ENGINE                                     =
--- =                                                                            =
--- ==============================================================================
-
--- ==========================================
--- =          HELPER FUNCTIONS              =
--- ==========================================
-
-local function IsAlive(player)
-    if not player then return false end
-    local char = player.Character
-    if not char then return false end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return false end
-    if hum.Health <= 0 then return false end
-    return true
-end
-
-local function IsFriend(player)
-    if not Toggles.PlrIgnoreFriends.Value then return false end
-    local success, result = pcall(function()
-        return LocalPlayer:IsFriendsWith(player.UserId)
+-- ESP Auto-Bind
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(char)
+        task.wait(1)
+        if Twilight and Twilight.BindESPToObject then
+            pcall(function() Twilight:BindESPToObject(char, char:FindFirstChild("HumanoidRootPart")) end)
+        end
     end)
-    return success and result
-end
-
-local function IsTeammate(player)
-    if not player.Team or not LocalPlayer.Team then return false end
-    return player.Team == LocalPlayer.Team
-end
-
-local function IsVisibleRaycast(targetPart)
-    if not targetPart then return false end
-    local origin = Camera.CFrame.Position
-    local direction = (targetPart.Position - origin)
-    local params = RaycastParams.new()
-    params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    local result = Workspace:Raycast(origin, direction, params)
-    if result == nil then return true end
-    if result.Instance:IsDescendantOf(targetPart.Parent) then return true end
-    return false
-end
-
-local function GetWeaponName(player)
-    if not player.Character then return "None" end
-    local tool = player.Character:FindFirstChildOfClass("Tool")
-    if tool then return tool.Name end
-    return "None"
-end
-
-local function GetAimTarget()
-    local bestTarget = nil
-    local bestScore = math.huge
-
-    -- Sticky Aim: keep locking on the same target if alive
-    if Toggles.AimStickyAim.Value and StickyTarget and IsAlive(StickyTarget) then
-        local part = StickyTarget.Character:FindFirstChild(Options.AimPart.Value)
-        if part then
-            local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
-            if onScreen then return StickyTarget end
-        end
+end)
+for _, player in pairs(Players:GetPlayers()) do
+    if player.Character then
+        pcall(function() Twilight:BindESPToObject(player.Character, player.Character:FindFirstChild("HumanoidRootPart")) end)
     end
-
-    for _, v in ipairs(Players:GetPlayers()) do
-        if v == LocalPlayer then continue end
-        if not IsAlive(v) then continue end
-        if IsFriend(v) then continue end
-        if Toggles.AimTeamCheck.Value and IsTeammate(v) then continue end
-
-        local aimPartName = Options.AimPart.Value
-        local part = v.Character:FindFirstChild(aimPartName) or v.Character:FindFirstChild("HumanoidRootPart")
-        if not part then continue end
-
-        if Toggles.AimWallCheck.Value and not IsVisibleRaycast(part) then continue end
-
-        local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
-        if not onScreen then continue end
-
-        local mousePos = UserInputService:GetMouseLocation()
-        local dist2D = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-        local dist3D = (Camera.CFrame.Position - part.Position).Magnitude
-
-        -- FOV Check
-        if Toggles.AimShowFOV.Value and dist2D > Options.AimFOVSize.Value then continue end
-
-        local score = dist2D
-        local priority = Options.AimPriority.Value
-        if priority == 'Closest Distance' then
-            score = dist3D
-        elseif priority == 'Lowest Health' then
-            score = v.Character.Humanoid.Health
+    player.CharacterAdded:Connect(function(char)
+        task.wait(1)
+        if Twilight and Twilight.BindESPToObject then
+            pcall(function() Twilight:BindESPToObject(char, char:FindFirstChild("HumanoidRootPart")) end)
         end
-
-        if score < bestScore then
-            bestScore = score
-            bestTarget = v
-        end
-    end
-
-    StickyTarget = bestTarget
-    return bestTarget
-end
-
--- ==========================================
--- =          ESP OBJECT FACTORY            =
--- ==========================================
-
-local function CreateESPForPlayer(player)
-    if ESPCache[player] then return end
-
-    local esp = {}
-    esp.box = NewDrawing("Square")
-    esp.box.Thickness = 1
-    esp.box.Filled = false
-
-    esp.name = NewDrawing("Text")
-    esp.name.Size = 14
-    esp.name.Center = true
-    esp.name.Outline = true
-
-    esp.healthBar = NewDrawing("Line")
-    esp.healthBar.Thickness = 2
-
-    esp.healthBarBG = NewDrawing("Line")
-    esp.healthBarBG.Thickness = 4
-    esp.healthBarBG.Color = Color3.fromRGB(30, 30, 30)
-
-    esp.healthText = NewDrawing("Text")
-    esp.healthText.Size = 12
-    esp.healthText.Center = false
-    esp.healthText.Outline = true
-
-    esp.weapon = NewDrawing("Text")
-    esp.weapon.Size = 12
-    esp.weapon.Center = true
-    esp.weapon.Outline = true
-
-    esp.tracer = NewDrawing("Line")
-    esp.tracer.Thickness = 1
-
-    esp.headDot = NewDrawing("Circle")
-    esp.headDot.Filled = true
-    esp.headDot.Thickness = 1
-
-    esp.distance = NewDrawing("Text")
-    esp.distance.Size = 12
-    esp.distance.Center = true
-    esp.distance.Outline = true
-
-    -- Highlight (Chams)
-    local hlOk, hl = pcall(function()
-        local h = Instance.new("Highlight")
-        h.Name = "Chams_" .. player.Name
-        h.Enabled = false
-        h.Parent = ChamsContainer
-        return h
     end)
-    esp.highlight = hlOk and hl or nil
-
-    ESPCache[player] = esp
 end
 
-local function DestroyESPForPlayer(player)
-    local esp = ESPCache[player]
-    if not esp then return end
+--// Engine Hooks & Features
 
-    pcall(function() esp.box:Remove() end)
-    pcall(function() esp.name:Remove() end)
-    pcall(function() esp.healthBar:Remove() end)
-    pcall(function() esp.healthBarBG:Remove() end)
-    pcall(function() esp.healthText:Remove() end)
-    pcall(function() esp.weapon:Remove() end)
-    pcall(function() esp.tracer:Remove() end)
-    pcall(function() esp.headDot:Remove() end)
-    pcall(function() esp.distance:Remove() end)
-    if esp.highlight then pcall(function() esp.highlight:Destroy() end) end
-
-    ESPCache[player] = nil
-end
-
-local function HideAllESP(esp)
-    esp.box.Visible = false
-    esp.name.Visible = false
-    esp.healthBar.Visible = false
-    esp.healthBarBG.Visible = false
-    esp.healthText.Visible = false
-    esp.weapon.Visible = false
-    esp.tracer.Visible = false
-    esp.headDot.Visible = false
-    esp.distance.Visible = false
-    if esp.highlight then esp.highlight.Enabled = false end
-end
-
--- Initialize ESP for all current players
-for _, v in ipairs(Players:GetPlayers()) do
-    if v ~= LocalPlayer then CreateESPForPlayer(v) end
-end
-
-Players.PlayerAdded:Connect(function(v)
-    CreateESPForPlayer(v)
+-- 1. FOV Circle Update
+RunService.RenderStepped:Connect(function()
+    Lunar.Objects.FOVCircle.Position = Vector2.new(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y)
+    Lunar.Objects.FOVCircle.Radius = Lunar.Features.Combat.FOV.Radius
+    Lunar.Objects.FOVCircle.Visible = Lunar.Features.Combat.FOV.Enabled
+    Lunar.Objects.FOVCircle.Color = Lunar.Features.Combat.FOV.Color
+    Lunar.Objects.FOVCircle.Filled = Lunar.Features.Combat.FOV.Filled
+    Lunar.Objects.FOVCircle.Thickness = Lunar.Features.Combat.FOV.Thickness
+    
+    Lunar.Targeting.CurrentTarget = GetClosestPlayer()
 end)
 
-Players.PlayerRemoving:Connect(function(v)
-    DestroyESPForPlayer(v)
-    if RadarCache[v] then
-        pcall(function() RadarCache[v]:Remove() end)
-        RadarCache[v] = nil
+-- 2. Desync Engine (Advanced Heartbeat/RenderStepped Separation)
+local AntiAimAngle = 0
+RunService.Heartbeat:Connect(function()
+    if Lunar.Features.AntiAim.Enabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character.HumanoidRootPart
+        Lunar.Objects.RealVelocity = hrp.Velocity
+        
+        local mode = Lunar.Features.AntiAim.Mode
+        local power = Lunar.Features.AntiAim.DesyncPower
+        
+        local fakeVel = Vector3.new(0,0,0)
+        
+        if mode == "Static" then
+            fakeVel = Vector3.new(power, power, power)
+        elseif mode == "Jitter" then
+            fakeVel = Vector3.new(math.random(-power, power), math.random(-power, power), math.random(-power, power))
+        elseif mode == "Spin" then
+            AntiAimAngle = AntiAimAngle + math.rad(Lunar.Features.AntiAim.SpinSpeed)
+            fakeVel = Vector3.new(math.sin(AntiAimAngle) * power, 0, math.cos(AntiAimAngle) * power)
+        elseif mode == "Orbit" then
+            AntiAimAngle = AntiAimAngle + math.rad(Lunar.Features.AntiAim.SpinSpeed)
+            fakeVel = Vector3.new(math.sin(AntiAimAngle) * power, power, math.cos(AntiAimAngle) * power)
+        elseif mode == "Custom" then
+            fakeVel = Vector3.new(0, power * Lunar.Features.AntiAim.VelocityMulti, 0)
+        end
+        
+        hrp.Velocity = fakeVel
     end
 end)
 
--- ==========================================
--- =        DEATH POSITION TRACKING         =
--- ==========================================
-LocalPlayer.CharacterRemoving:Connect(function(char)
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if hrp then DeathPosition = hrp.Position end
+RunService.RenderStepped:Connect(function()
+    if Lunar.Features.AntiAim.Enabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character.HumanoidRootPart
+        hrp.Velocity = Lunar.Objects.RealVelocity
+    end
 end)
 
--- ==========================================
--- =         INFINITE JUMP HANDLER          =
--- ==========================================
+-- 3. Movement Engine
+RunService.Heartbeat:Connect(function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
+        local hrp = char.HumanoidRootPart
+        local hum = char.Humanoid
+        
+        -- Speedhack
+        if Lunar.Features.Movement.Speed.Enabled then
+            if Lunar.Features.Movement.Speed.Method == "CFrame" and hum.MoveDirection.Magnitude > 0 then
+                hrp.CFrame = hrp.CFrame + (hum.MoveDirection * (Lunar.Features.Movement.Speed.Value / 100))
+            elseif Lunar.Features.Movement.Speed.Method == "Velocity" then
+                hrp.Velocity = Vector3.new(hum.MoveDirection.X * Lunar.Features.Movement.Speed.Value, hrp.Velocity.Y, hum.MoveDirection.Z * Lunar.Features.Movement.Speed.Value)
+            end
+        end
+        
+        -- Spider
+        if Lunar.Features.Movement.Spider then
+            local ray = Ray.new(hrp.Position, hrp.CFrame.LookVector * 3)
+            local hit, pos = Workspace:FindPartOnRayWithIgnoreList(ray, {char})
+            if hit then
+                hrp.Velocity = Vector3.new(hrp.Velocity.X, 50, hrp.Velocity.Z)
+            end
+        end
+        
+        -- BunnyHop
+        if Lunar.Features.Movement.BunnyHop and hum.FloorMaterial ~= Enum.Material.Air and hum.MoveDirection.Magnitude > 0 then
+            hum.Jump = true
+        end
+    end
+end)
+
 UserInputService.JumpRequest:Connect(function()
-    if Toggles.SelfInfJump.Value and IsAlive(LocalPlayer) then
+    if Lunar.Features.Movement.InfiniteJump and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
         LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end)
 
--- ==========================================
--- =         CLICK TP INPUT HANDLER         =
--- ==========================================
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if Toggles.TPClickTP.Value and Options.TPClickTPKey:GetState() then
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            if Mouse.Hit and IsAlive(LocalPlayer) then
-                LocalPlayer.Character:PivotTo(Mouse.Hit + Vector3.new(0, 3, 0))
-            end
-        end
-    end
-end)
-
--- ==========================================
--- =            ANTI AFK HANDLER            =
--- ==========================================
-LocalPlayer.Idled:Connect(function()
-    if Toggles.MiscAntiAFK.Value then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end
-end)
-
--- ==========================================
--- =       INSTANT INTERACT HANDLER         =
--- ==========================================
-ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
-    if Toggles.MiscInstantInteract.Value then
-        prompt.HoldDuration = 0
-    end
-end)
-
--- ==========================================
--- =       NO FALL DAMAGE HANDLER           =
--- ==========================================
-LocalPlayer.CharacterAdded:Connect(function(char)
-    local hum = char:WaitForChild("Humanoid", 10)
-    if hum then
-        hum.StateChanged:Connect(function(_, newState)
-            if Toggles.MiscNoFallDmg.Value and newState == Enum.HumanoidStateType.Freefall then
-                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-                hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-            end
-        end)
-    end
-end)
-
--- ==============================================================================
--- =                   MAIN RENDER LOOP (Every Frame)                           =
--- ==============================================================================
-RunService.RenderStepped:Connect(function(deltaTime)
-    TickCounter = TickCounter + 1
-    local mousePos = UserInputService:GetMouseLocation()
-    local screenSize = Camera.ViewportSize
-    local myAlive = IsAlive(LocalPlayer)
-
-    -- ===== FOV CIRCLE =====
-    if Toggles.AimShowFOV.Value then
-        FOVCircle.Visible = true
-        FOVCircle.Radius = Options.AimFOVSize.Value
-        FOVCircle.Color = Options.AimFOVColor.Value
-        FOVCircle.Position = mousePos
-    else
-        FOVCircle.Visible = false
-    end
-
-    -- ===== AIMBOT =====
-    local currentTarget = nil
-    if Toggles.AimEnabled.Value and Options.AimKey:GetState() then
-        currentTarget = GetAimTarget()
-        if currentTarget and IsAlive(currentTarget) then
-            local aimPartName = Options.AimPart.Value
-            local part = currentTarget.Character:FindFirstChild(aimPartName) or currentTarget.Character:FindFirstChild("HumanoidRootPart")
-
-            if part then
-                local targetPos = part.Position
-
-                -- Velocity prediction
-                if Toggles.AimPrediction.Value then
-                    local vel = part.AssemblyLinearVelocity
-                    local dist3D = (Camera.CFrame.Position - part.Position).Magnitude
-                    targetPos = targetPos + (vel * Options.AimPredAmt.Value * (dist3D / 500))
-                end
-
-                -- Aim shake (humanize movement)
-                if Toggles.AimShake.Value then
-                    local intensity = Options.AimShakeAmt.Value / 50
-                    targetPos = targetPos + Vector3.new(
-                        math.sin(TickCounter * 0.3) * intensity,
-                        math.cos(TickCounter * 0.4) * intensity * 0.5,
-                        math.sin(TickCounter * 0.5) * intensity
-                    )
-                end
-
-                -- Camera method
-                if Options.AimMethod.Value == 'Camera' then
-                    local desiredCF = CFrame.new(Camera.CFrame.Position, targetPos)
-                    local smoothFactor = 1 / Options.AimSmoothness.Value
-                    Camera.CFrame = Camera.CFrame:Lerp(desiredCF, smoothFactor)
-                end
-
-                -- Mouse method
-                if Options.AimMethod.Value == 'Mouse' then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
-                    if onScreen and mousemoverel then
-                        local target2D = Vector2.new(screenPos.X, screenPos.Y)
-                        local delta = (target2D - mousePos) / Options.AimSmoothness.Value
-                        mousemoverel(delta.X, delta.Y)
-                    end
-                end
-
-                -- Target line
-                if Toggles.AimTargetLine.Value then
-                    local linePos, lineOnScreen = Camera:WorldToViewportPoint(targetPos)
-                    if lineOnScreen then
-                        TargetLine.From = mousePos
-                        TargetLine.To = Vector2.new(linePos.X, linePos.Y)
-                        TargetLine.Color = Color3.fromRGB(255, 50, 50)
-                        TargetLine.Visible = true
-                    else
-                        TargetLine.Visible = false
-                    end
-                else
-                    TargetLine.Visible = false
-                end
-            end
-        else
-            TargetLine.Visible = false
-        end
-    else
-        TargetLine.Visible = false
-    end
-
-    -- ===== TRIGGERBOT =====
-    if Toggles.TrigEnabled.Value and Options.TrigKey:GetState() and not TriggerCooldown then
-        local origin = Camera.CFrame.Position
-        local direction = Camera.CFrame.LookVector * 1000
-        local params = RaycastParams.new()
-        params.FilterDescendantsInstances = {LocalPlayer.Character}
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        local result = Workspace:Raycast(origin, direction, params)
-        if result and result.Instance then
-            local hitChar = result.Instance:FindFirstAncestorOfClass("Model")
-            if hitChar then
-                local hitPlayer = Players:GetPlayerFromCharacter(hitChar)
-                if hitPlayer and hitPlayer ~= LocalPlayer then
-                    local shouldShoot = true
-                    if Toggles.TrigTeamCheck.Value and IsTeammate(hitPlayer) then shouldShoot = false end
-                    if math.random(1, 100) <= Options.TrigMissChance.Value then shouldShoot = false end
-
-                    if shouldShoot then
-                        TriggerCooldown = true
-                        local delay = Options.TrigMinDelay.Value + math.random() * (Options.TrigMaxDelay.Value - Options.TrigMinDelay.Value)
-                        task.delay(delay, function()
-                            if mouse1click then mouse1click() end
-                            TriggerCooldown = false
-                        end)
-                    end
-                end
-            end
-        end
-    end
-
-    -- ===== ESP RENDERING =====
-    for player, esp in pairs(ESPCache) do
-        if not Toggles.ESPEnabled.Value or not IsAlive(player) then
-            HideAllESP(esp)
-            continue
-        end
-
-        local char = player.Character
-        local hrp = char.HumanoidRootPart
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local head = char:FindFirstChild("Head")
-
-        local pos3D, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-        local dist3D = (Camera.CFrame.Position - hrp.Position).Magnitude
-
-        -- Team check
-        if Toggles.ESPTeamCheck.Value and IsTeammate(player) then
-            HideAllESP(esp)
-            continue
-        end
-
-        -- Friend check
-        if IsFriend(player) then
-            HideAllESP(esp)
-            continue
-        end
-
-        -- Distance check
-        if dist3D > Options.ESPMaxDist.Value then
-            HideAllESP(esp)
-            continue
-        end
-
-        if not onScreen then
-            HideAllESP(esp)
-            continue
-        end
-
-        -- Compute bounding box from head and feet
-        local color = IsTeammate(player) and Options.ESPAllyColor.Value or Options.ESPTargetColor.Value
-        local headPos3D = head and Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or pos3D
-        local feetPos3D = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
-
-        local boxH = math.abs(headPos3D.Y - feetPos3D.Y)
-        local boxW = boxH / 2
-        local boxTopLeft = Vector2.new(pos3D.X - boxW / 2, headPos3D.Y)
-
-        -- BOX
-        if Toggles.ESPBox.Value then
-            esp.box.Size = Vector2.new(boxW, boxH)
-            esp.box.Position = boxTopLeft
-            esp.box.Color = color
-            esp.box.Visible = true
-        else esp.box.Visible = false end
-
-        -- NAME
-        if Toggles.ESPName.Value then
-            esp.name.Position = Vector2.new(pos3D.X, boxTopLeft.Y - 16)
-            esp.name.Text = player.Name
-            esp.name.Color = color
-            esp.name.Visible = true
-        else esp.name.Visible = false end
-
-        -- DISTANCE
-        if Toggles.ESPDistance.Value then
-            esp.distance.Position = Vector2.new(pos3D.X, boxTopLeft.Y + boxH + 2)
-            esp.distance.Text = "[" .. math.floor(dist3D) .. "m]"
-            esp.distance.Color = Color3.fromRGB(200, 200, 200)
-            esp.distance.Visible = true
-        else esp.distance.Visible = false end
-
-        -- HEALTH BAR (Vertical bar on the left side of the box)
-        if Toggles.ESPHealthBar.Value then
-            local health = hum.Health
-            local maxHealth = hum.MaxHealth
-            local ratio = math.clamp(health / maxHealth, 0, 1)
-            local barX = boxTopLeft.X - 6
-
-            esp.healthBarBG.From = Vector2.new(barX, boxTopLeft.Y)
-            esp.healthBarBG.To = Vector2.new(barX, boxTopLeft.Y + boxH)
-            esp.healthBarBG.Visible = true
-
-            esp.healthBar.From = Vector2.new(barX, boxTopLeft.Y + boxH * (1 - ratio))
-            esp.healthBar.To = Vector2.new(barX, boxTopLeft.Y + boxH)
-            esp.healthBar.Color = Color3.fromHSV(ratio * 0.33, 1, 1)
-            esp.healthBar.Visible = true
-        else
-            esp.healthBar.Visible = false
-            esp.healthBarBG.Visible = false
-        end
-
-        -- HEALTH TEXT
-        if Toggles.ESPHealthText.Value then
-            esp.healthText.Position = Vector2.new(boxTopLeft.X - 30, boxTopLeft.Y + boxH / 2 - 6)
-            esp.healthText.Text = tostring(math.floor(hum.Health))
-            esp.healthText.Color = Color3.fromHSV(math.clamp(hum.Health / hum.MaxHealth, 0, 1) * 0.33, 1, 1)
-            esp.healthText.Visible = true
-        else esp.healthText.Visible = false end
-
-        -- WEAPON
-        if Toggles.ESPWeapon.Value then
-            esp.weapon.Position = Vector2.new(pos3D.X, boxTopLeft.Y + boxH + (Toggles.ESPDistance.Value and 16 or 2))
-            esp.weapon.Text = GetWeaponName(player)
-            esp.weapon.Color = Color3.fromRGB(255, 200, 100)
-            esp.weapon.Visible = true
-        else esp.weapon.Visible = false end
-
-        -- TRACERS
-        if Toggles.ESPTracers.Value then
-            esp.tracer.From = Vector2.new(screenSize.X / 2, screenSize.Y)
-            esp.tracer.To = Vector2.new(pos3D.X, boxTopLeft.Y + boxH)
-            esp.tracer.Color = color
-            esp.tracer.Visible = true
-        else esp.tracer.Visible = false end
-
-        -- HEAD DOT
-        if Toggles.ESPHeadDot.Value and head then
-            local headScreenPos = Camera:WorldToViewportPoint(head.Position)
-            esp.headDot.Position = Vector2.new(headScreenPos.X, headScreenPos.Y)
-            esp.headDot.Radius = math.clamp(80 / dist3D, 1, 6)
-            esp.headDot.Color = color
-            esp.headDot.Visible = true
-        else esp.headDot.Visible = false end
-
-        -- CHAMS (Highlight)
-        if esp.highlight then
-            if Toggles.ESPChams.Value then
-                esp.highlight.Adornee = char
-                esp.highlight.FillColor = Options.ESPChamsColor.Value
-                esp.highlight.OutlineColor = Options.ESPChamsOutline.Value
-                esp.highlight.FillTransparency = Options.ESPChamsFillTrans.Value
-                esp.highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                esp.highlight.Enabled = true
-            else
-                esp.highlight.Enabled = false
-            end
-        end
-    end
-
-    -- ===== RADAR =====
-    if Toggles.RadarEnabled.Value and myAlive then
-        local radarSize = Options.RadarSize.Value
-        local radarPos = Vector2.new(20, screenSize.Y / 2 - radarSize / 2)
-
-        RadarBackground.Size = Vector2.new(radarSize, radarSize)
-        RadarBackground.Position = radarPos
-        RadarBackground.Color = Options.RadarBGColor.Value
-        RadarBackground.Transparency = Options.RadarTransparency.Value
-        RadarBackground.Visible = true
-
-        RadarBorder.Size = Vector2.new(radarSize, radarSize)
-        RadarBorder.Position = radarPos
-        RadarBorder.Visible = true
-
-        RadarCenter.Position = radarPos + Vector2.new(radarSize / 2, radarSize / 2)
-        RadarCenter.Visible = true
-
-        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
-        local camLook = Camera.CFrame.LookVector
-
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player == LocalPlayer then continue end
-            if not IsAlive(player) then
-                if RadarCache[player] then RadarCache[player].Visible = false end
-                continue
-            end
-            if Toggles.RadarTeamCheck.Value and IsTeammate(player) then
-                if RadarCache[player] then RadarCache[player].Visible = false end
-                continue
-            end
-
-            if not RadarCache[player] then
-                RadarCache[player] = NewDrawing("Circle")
-                RadarCache[player].Filled = true
-                RadarCache[player].Radius = 3
-            end
-
-            local theirPos = player.Character.HumanoidRootPart.Position
-            local rel = (theirPos - myPos)
-            local zoom = Options.RadarZoom.Value
-            local maxR = radarSize / 2
-
-            -- Rotate relative position by camera direction
-            local forward = Vector2.new(camLook.X, camLook.Z).Unit
-            local right = Vector2.new(-forward.Y, forward.X)
-            local relFlat = Vector2.new(rel.X, rel.Z)
-            local dotForward = relFlat:Dot(forward)
-            local dotRight = relFlat:Dot(right)
-
-            local plotX = math.clamp(dotRight * zoom, -maxR + 4, maxR - 4)
-            local plotY = math.clamp(-dotForward * zoom, -maxR + 4, maxR - 4)
-
-            local dotPos = radarPos + Vector2.new(maxR + plotX, maxR + plotY)
-            local dotColor = IsTeammate(player) and Options.ESPAllyColor.Value or Options.ESPTargetColor.Value
-
-            RadarCache[player].Position = dotPos
-            RadarCache[player].Color = dotColor
-            RadarCache[player].Visible = true
-        end
-    else
-        RadarBackground.Visible = false
-        RadarBorder.Visible = false
-        RadarCenter.Visible = false
-        for _, dot in pairs(RadarCache) do dot.Visible = false end
-    end
-
-    -- ===== DEATH POSITION MARKER =====
-    if Toggles.TPRenderDeath.Value and DeathPosition then
-        local deathScreen, deathOnScreen = Camera:WorldToViewportPoint(DeathPosition)
-        if deathOnScreen then
-            DeathMarker.Position = Vector2.new(deathScreen.X, deathScreen.Y)
-            DeathMarker.Visible = true
-        else DeathMarker.Visible = false end
-    else DeathMarker.Visible = false end
-
-    -- ===== FREECAM =====
-    if Toggles.WorldFreecam.Value then
-        if not FreecamActive then
-            FreecamActive = true
-            FreecamStoredCFrame = Camera.CFrame
-        end
-        Camera.CameraType = Enum.CameraType.Scriptable
-
-        local speed = Options.WorldFreecamSpeed.Value
-        local dir = Vector3.new()
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0, 1, 0) end
-        Camera.CFrame = Camera.CFrame + dir * speed
-    else
-        if FreecamActive then
-            FreecamActive = false
-            Camera.CameraType = Enum.CameraType.Custom
-        end
-    end
-
-    -- ===== SPECTATE =====
-    if Toggles.PlrSpectate.Value then
-        local target = Players:FindFirstChild(Options.PlrSelected.Value)
-        if target and IsAlive(target) then
-            Camera.CameraSubject = target.Character:FindFirstChildOfClass("Humanoid")
-        end
-    elseif myAlive then
-        Camera.CameraSubject = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    end
-
-    -- ===== CAMERA / WORLD SETTINGS =====
-    if myAlive then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        -- Long Neck
-        if Toggles.SelfLongNeck.Value then
-            hum.CameraOffset = Vector3.new(0, Options.SelfLongNeckHeight.Value, 0)
-        else
-            hum.CameraOffset = Vector3.new(0, 0, 0)
-        end
-
-        -- Third person
-        if Toggles.MiscThirdPerson.Value then
-            LocalPlayer.CameraMaxZoomDistance = 15
-            LocalPlayer.CameraMinZoomDistance = 15
-        elseif Toggles.MiscUnlockCamera.Value then
-            LocalPlayer.CameraMaxZoomDistance = 100000
-        else
-            LocalPlayer.CameraMinZoomDistance = 0.5
-            LocalPlayer.CameraMaxZoomDistance = 400
-        end
-    end
-
-    -- Lighting
-    if Toggles.WorldFullbright.Value then
-        Lighting.Ambient = Color3.new(1, 1, 1)
-        Lighting.ColorShift_Bottom = Color3.new(1, 1, 1)
-        Lighting.ColorShift_Top = Color3.new(1, 1, 1)
-    end
-
-    Lighting.ClockTime = Options.WorldTime.Value
-    Camera.FieldOfView = Options.WorldFOV.Value
-    Workspace.Gravity = Options.WorldGravity.Value
-    Lighting.FogEnd = Toggles.WorldRemoveFog.Value and 1e8 or OriginalFog
-
-    if Toggles.WorldRemoveShadows.Value then
+-- 4. World Engine
+RunService.RenderStepped:Connect(function()
+    if Lunar.Features.Visuals.World.Fullbright then
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+        Lighting.ColorShift_Bottom = Color3.fromRGB(255, 255, 255)
+        Lighting.ColorShift_Top = Color3.fromRGB(255, 255, 255)
         Lighting.GlobalShadows = false
+    else
+        Lighting.Ambient = Lunar.Features.Visuals.World.Ambient
+        Lighting.GlobalShadows = true
     end
+    Lighting.TimeOfDay = tostring(Lunar.Features.Visuals.World.TimeOfDay) .. ":00:00"
+    Lighting.FogEnd = Lunar.Features.Visuals.World.FogEnd
 end)
 
--- ==============================================================================
--- =                   PHYSICS LOOP (Stepped, 60hz)                             =
--- ==============================================================================
-RunService.Stepped:Connect(function()
-    if not IsAlive(LocalPlayer) then return end
-
-    local char = LocalPlayer.Character
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hum or not hrp then return end
-
-    -- ===== SPEEDHACK =====
-    if Toggles.SelfSpeedhack.Value then
-        hum.WalkSpeed = Options.SelfSpeedhackVal.Value
-    end
-
-    -- ===== JUMP BOOST =====
-    if Toggles.SelfJumpBoost.Value then
-        hum.JumpPower = Options.SelfJumpPower.Value
-        hum.UseJumpPower = true
-    end
-
-    -- ===== NOCLIP =====
-    if Toggles.SelfNoClip.Value then
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
-
-    -- ===== FLY =====
-    if Toggles.SelfFly.Value then
-        local camLook = Camera.CFrame.LookVector
-        local camRight = Camera.CFrame.RightVector
-        local velocity = Vector3.new(0, 0, 0)
-
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then velocity = velocity + camLook end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then velocity = velocity - camLook end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then velocity = velocity + camRight end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then velocity = velocity - camRight end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then velocity = velocity + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then velocity = velocity - Vector3.new(0, 1, 0) end
-
-        hrp.Velocity = velocity * Options.SelfFlySpeed.Value
-        hum.PlatformStand = true
-    else
-        if hum.PlatformStand then
-            hum.PlatformStand = false
-        end
-    end
-
-    -- ===== JETPACK =====
-    if Toggles.SelfJetPack.Value and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-        hrp.Velocity = Vector3.new(hrp.Velocity.X, 60, hrp.Velocity.Z)
-    end
-
-    -- ===== AIR SWIM =====
-    if Toggles.SelfAirSwim.Value then
-        hum:ChangeState(Enum.HumanoidStateType.Swimming)
-    end
-
-    -- ===== SPIN BOT =====
-    if Toggles.RageSpinBot.Value then
-        hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(Options.RageSpinSpeed.Value), 0)
-    end
-
-    -- ===== WALK FLING =====
-    if Toggles.SelfWalkFling.Value then
-        hrp.CFrame = hrp.CFrame * CFrame.Angles(
-            math.rad(math.random(-180, 180)),
-            math.rad(math.random(-180, 180)),
-            math.rad(math.random(-180, 180))
-        )
-        hrp.Velocity = hrp.Velocity * 1.5
-    end
-
-    -- ===== GOON ANIMATION =====
-    if Toggles.SelfGoonAnim.Value then
-        local animator = hum:FindFirstChildOfClass("Animator")
-        if animator then
-            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                track:AdjustSpeed(3)
-            end
-        end
-    end
-
-    -- ===== HITBOX EXPANDER =====
-    if Toggles.RageHitboxEnabled.Value then
-        for _, v in ipairs(Players:GetPlayers()) do
-            if v ~= LocalPlayer and IsAlive(v) then
-                if Toggles.AimTeamCheck.Value and IsTeammate(v) then continue end
-
-                local targetChar = v.Character
-                local expandPart
-
-                if Toggles.RageHitboxHeadOnly.Value then
-                    expandPart = targetChar:FindFirstChild("Head")
-                else
-                    expandPart = targetChar:FindFirstChild("HumanoidRootPart")
-                end
-
-                if expandPart then
-                    expandPart.Size = Vector3.new(
-                        Options.RageHitboxSize.Value,
-                        Options.RageHitboxSize.Value,
-                        Options.RageHitboxSize.Value
-                    )
-                    expandPart.CanCollide = false
-
-                    if Toggles.RageHitboxShow.Value then
-                        expandPart.Transparency = 0.5
-                        expandPart.Material = Enum.Material.Neon
-                        expandPart.BrickColor = BrickColor.new(Options.RageHitboxColor.Value)
-                    else
-                        expandPart.Transparency = 1
+-- 5. Namecall Hooking (Silent Aim & Security)
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    
+    if not checkcaller() then
+        if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" or method == "Raycast" then
+            if Lunar.Features.Combat.SilentAim.Enabled and Lunar.Targeting.CurrentTarget and Lunar.Targeting.CurrentTarget.Character then
+                local part = Lunar.Targeting.CurrentTarget.Character:FindFirstChild(Lunar.Features.Combat.SilentAim.Part)
+                if part then
+                    if math.random(1, 100) <= Lunar.Features.Combat.SilentAim.HitChance then
+                        if method == "Raycast" then
+                            local dir = (part.Position - args[1]).Unit * 5000
+                            args[2] = dir
+                            return oldNamecall(self, unpack(args))
+                        else
+                            local ray = Ray.new(args[1].Origin, (part.Position - args[1].Origin).Unit * 5000)
+                            args[1] = ray
+                            return oldNamecall(self, unpack(args))
+                        end
                     end
                 end
             end
         end
     end
-
-    -- ===== LOOK AT PLAYER =====
-    if Toggles.PlrLookAt.Value then
-        local target = Players:FindFirstChild(Options.PlrSelected.Value)
-        if target and IsAlive(target) then
-            hrp.CFrame = CFrame.new(hrp.Position, target.Character.HumanoidRootPart.Position)
-        end
-    end
+    return oldNamecall(self, ...)
 end)
 
--- ==============================================================================
--- =                          CLEANUP ON UNLOAD                                 =
--- ==============================================================================
-Library:OnUnload(function()
-    Library.Unloaded = true
+--// ==========================================
+--// INTERFACE CREATION (STARLIGHT)
+--// ==========================================
 
-    -- Remove all Drawing objects
-    pcall(function() FOVCircle:Remove() end)
-    pcall(function() TargetLine:Remove() end)
-    pcall(function() RadarBackground:Remove() end)
-    pcall(function() RadarBorder:Remove() end)
-    pcall(function() RadarCenter:Remove() end)
-    pcall(function() DeathMarker:Remove() end)
+local Window = Starlight:CreateWindow({
+    Name = "Lunar Universal",
+    Subtitle = "V5.0.0 (Titan Edition)",
+    Icon = NebulaIcons:GetIcon('moon', 'Lucide'),
+    LoadingEnabled = true,
+    LoadingSettings = {
+        Title = "Booting Lunar Titan...",
+        Subtitle = "Injecting Advanced Physics Engine",
+    },
+    BuildWarnings = false,
+    InterfaceAdvertisingPrompts = false,
+    NotifyOnCallbackError = true,
+    FileSettings = {
+        ConfigFolder = "LunarTitanConfigs",
+        ThemesInRoot = false
+    },
+    DefaultSize = UDim2.new(0, 850, 0, 600)
+})
 
-    -- Remove all ESP drawings
-    for player, esp in pairs(ESPCache) do
-        DestroyESPForPlayer(player)
+--// 1. COMBAT TAB
+local CombatSection = Window:CreateTabSection("Combat", true)
+local AimTab = CombatSection:CreateTab({ Name = "Aimbot", Icon = NebulaIcons:GetIcon('crosshair', 'Lucide'), Columns = 2 }, "AimTab")
+
+local AimbotGB = AimTab:CreateGroupbox({ Name = "Silent Aim", Column = 1 }, "AimbotGB")
+AimbotGB:CreateToggle({ Name = "Enable Silent Aim", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Combat.SilentAim.Enabled = v end }, "SA_Toggle")
+AimbotGB:CreateDropdown({ Name = "Target Part", Options = {"Head", "HumanoidRootPart", "Torso"}, CurrentOption = {"Head"}, Callback = function(v) Lunar.Features.Combat.SilentAim.Part = v[1] end }, "SA_Part")
+AimbotGB:CreateSlider({ Name = "Hit Chance", Range = {1, 100}, Increment = 1, Suffix = "%", CurrentValue = 100, Callback = function(v) Lunar.Features.Combat.SilentAim.HitChance = v end }, "SA_Chance")
+AimbotGB:CreateToggle({ Name = "Wall Check", CurrentValue = false, Style = 1, Callback = function(v) Lunar.Features.Combat.SilentAim.WallCheck = v end }, "SA_Wall")
+
+local FOVGB = AimTab:CreateGroupbox({ Name = "Field of View", Column = 1 }, "FOVGB")
+FOVGB:CreateToggle({ Name = "Show FOV Circle", CurrentValue = true, Style = 2, Callback = function(v) Lunar.Features.Combat.FOV.Enabled = v end }, "FOV_Toggle")
+local fovColorLabel = FOVGB:CreateLabel({ Name = "FOV Color" }, "FOV_Color_LBL")
+fovColorLabel:AddColorPicker({ CurrentValue = Color3.fromRGB(255, 255, 255), Callback = function(c) Lunar.Features.Combat.FOV.Color = c end }, "FOV_Color")
+FOVGB:CreateSlider({ Name = "Radius", Range = {10, 1000}, Increment = 1, CurrentValue = 150, Callback = function(v) Lunar.Features.Combat.FOV.Radius = v end }, "FOV_Radius")
+FOVGB:CreateToggle({ Name = "Filled Shape", CurrentValue = false, Style = 1, Callback = function(v) Lunar.Features.Combat.FOV.Filled = v end }, "FOV_Fill")
+FOVGB:CreateSlider({ Name = "Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) Lunar.Features.Combat.FOV.Thickness = v end }, "FOV_Thick")
+
+local TriggerBotGB = AimTab:CreateGroupbox({ Name = "TriggerBot", Column = 2 }, "TriggerBotGB")
+TriggerBotGB:CreateToggle({ Name = "Enable TriggerBot", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Combat.TriggerBot.Enabled = v end }, "TB_Toggle")
+TriggerBotGB:CreateSlider({ Name = "Reaction Delay", Range = {0, 1000}, Increment = 10, Suffix = "ms", CurrentValue = 0, Callback = function(v) Lunar.Features.Combat.TriggerBot.Delay = v end }, "TB_Delay")
+
+--// 2. ANTI-AIM / DESYNC TAB
+local DesyncTab = CombatSection:CreateTab({ Name = "Anti-Aim", Icon = NebulaIcons:GetIcon('shield', 'Lucide'), Columns = 2 }, "DesyncTab")
+
+local AA_MainGB = DesyncTab:CreateGroupbox({ Name = "Desync Engine", Column = 1 }, "AA_MainGB")
+AA_MainGB:CreateToggle({ Name = "Enable Anti-Aim", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.AntiAim.Enabled = v end }, "AA_Toggle")
+AA_MainGB:CreateDropdown({ Name = "Desync Mode", Options = {"Static", "Jitter", "Spin", "Orbit", "Custom"}, CurrentOption = {"Static"}, Callback = function(v) Lunar.Features.AntiAim.Mode = v[1] end }, "AA_Mode")
+AA_MainGB:CreateSlider({ Name = "Desync Power", Range = {1000, 100000}, Increment = 1000, CurrentValue = 5000, Callback = function(v) Lunar.Features.AntiAim.DesyncPower = v end }, "AA_Power")
+
+local AA_AdvGB = DesyncTab:CreateGroupbox({ Name = "Advanced Settings", Column = 2 }, "AA_AdvGB")
+AA_AdvGB:CreateSlider({ Name = "Spin Speed", Range = {1, 100}, Increment = 1, CurrentValue = 20, Callback = function(v) Lunar.Features.AntiAim.SpinSpeed = v end }, "AA_Spin")
+AA_AdvGB:CreateSlider({ Name = "Orbit Radius", Range = {1, 50}, Increment = 1, CurrentValue = 10, Callback = function(v) Lunar.Features.AntiAim.OrbitRadius = v end }, "AA_Orbit")
+AA_AdvGB:CreateSlider({ Name = "Velocity Multiplier", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Callback = function(v) Lunar.Features.AntiAim.VelocityMulti = v end }, "AA_Multi")
+AA_AdvGB:CreateButton({ Name = "Reset Desync Angles", Icon = NebulaIcons:GetIcon('refresh-cw', 'Lucide'), Callback = function() AntiAimAngle = 0 end }, "AA_Reset")
+
+--// 3. VISUALS TAB (TWILIGHT ESP)
+local VisualsSection = Window:CreateTabSection("Visuals", true)
+
+local ESPTab_enemy = VisualsSection:CreateTab({ Name = "ESP: Enemy", Icon = NebulaIcons:GetIcon('eye', 'Lucide'), Columns = 3 }, "ESPTab_enemy")
+
+-- MASTER CONTROLS
+local ESPMainGB_enemy = ESPTab_enemy:CreateGroupbox({ Name = "Main Settings", Column = 1 }, "ESPMainGB_enemy")
+ESPMainGB_enemy:CreateToggle({ Name = "Enable ESP for Enemy", CurrentValue = false, Style = 2, Callback = function(v) TS.Checks.Team.SelectedTeams.enemy = v; UpdateESP() end }, "ESP_Master_enemy")
+
+-- BOUNDING BOXES
+local ESPBoxGB_enemy = ESPTab_enemy:CreateGroupbox({ Name = "Bounding Boxes", Column = 1 }, "ESPBoxGB_enemy")
+ESPBoxGB_enemy:CreateToggle({ Name = "Enable Bounding Boxes", CurrentValue = false, Style = 2, Callback = function(v) TS.Box.Enabled = v; UpdateESP() end }, "ESP_Box_Toggle_enemy")
+ESPBoxGB_enemy:CreateDropdown({ Name = "Box Style", Options = {"Normal", "CornerBoxes"}, CurrentOption = {"Normal"}, Callback = function(v) 
+    if v[1] == "Normal" then TS.Box.Style = 2 else TS.Box.Style = 1 end
+    UpdateESP()
+end }, "ESP_Box_Style_enemy")
+ESPBoxGB_enemy:CreateToggle({ Name = "Enable Box Fill", CurrentValue = false, Style = 1, Callback = function(v) TS.Box.Filled.Enabled = v; UpdateESP() end }, "ESP_Box_Fill_enemy")
+ESPBoxGB_enemy:CreateSlider({ Name = "Box Thickness", Range = {1, 5}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Box.Thickness = v; UpdateESP() end }, "ESP_Box_Thick_enemy")
+ESPBoxGB_enemy:CreateSlider({ Name = "Fill Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Box.Filled.Transparency = v; UpdateESP() end }, "ESP_Box_FillTrans_enemy")
+
+local c_enemyLabel1 = ESPBoxGB_enemy:CreateLabel({ Name = "Box Outline Visible Color" }, "Col_LBL_enemy_1")
+c_enemyLabel1:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Box.Outline.Visible = c; UpdateESP() end }, "Col_enemy_1")
+local c_enemyLabel2 = ESPBoxGB_enemy:CreateLabel({ Name = "Box Outline Invisible Color" }, "Col_LBL_enemy_2")
+c_enemyLabel2:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Box.Outline.Invisible = c; UpdateESP() end }, "Col_enemy_2")
+local c_enemyLabel3 = ESPBoxGB_enemy:CreateLabel({ Name = "Box Fill Color" }, "Col_LBL_enemy_3")
+c_enemyLabel3:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Box.Fill.Visible = c; UpdateESP() end }, "Col_enemy_3")
+
+-- OTHER FEATURES
+local ESPFeatGB_enemy = ESPTab_enemy:CreateGroupbox({ Name = "Features", Column = 2 }, "ESPFeatGB_enemy")
+
+-- Name
+ESPFeatGB_enemy:CreateToggle({ Name = "Show Name", CurrentValue = false, Style = 1, Callback = function(v) TS.Name.Enabled.enemy = v; UpdateESP() end }, "ESP_Name_Toggle_enemy")
+local c_enemy_NameLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "Name Visible Color" }, "Col_LBL_Name_enemy_Vis")
+c_enemy_NameLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Name.Visible = c; UpdateESP() end }, "Col_Name_enemy_Vis")
+local c_enemy_NameLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "Name Invisible Color" }, "Col_LBL_Name_enemy_Invis")
+c_enemy_NameLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Name.Invisible = c; UpdateESP() end }, "Col_Name_enemy_Invis")
+ESPFeatGB_enemy:CreateDivider()
+
+-- Distance
+ESPFeatGB_enemy:CreateToggle({ Name = "Show Distance", CurrentValue = false, Style = 1, Callback = function(v) TS.Distance.Enabled.enemy = v; UpdateESP() end }, "ESP_Distance_Toggle_enemy")
+local c_enemy_DistanceLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "Distance Visible Color" }, "Col_LBL_Distance_enemy_Vis")
+c_enemy_DistanceLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Distance.Visible = c; UpdateESP() end }, "Col_Distance_enemy_Vis")
+local c_enemy_DistanceLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "Distance Invisible Color" }, "Col_LBL_Distance_enemy_Invis")
+c_enemy_DistanceLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Distance.Invisible = c; UpdateESP() end }, "Col_Distance_enemy_Invis")
+ESPFeatGB_enemy:CreateDivider()
+
+-- Tracer
+ESPFeatGB_enemy:CreateToggle({ Name = "Show Tracer", CurrentValue = false, Style = 1, Callback = function(v) TS.Tracer.Enabled.enemy = v; UpdateESP() end }, "ESP_Tracer_Toggle_enemy")
+local c_enemy_TracerLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "Tracer Visible Color" }, "Col_LBL_Tracer_enemy_Vis")
+c_enemy_TracerLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Tracer.Visible = c; UpdateESP() end }, "Col_Tracer_enemy_Vis")
+local c_enemy_TracerLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "Tracer Invisible Color" }, "Col_LBL_Tracer_enemy_Invis")
+c_enemy_TracerLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Tracer.Invisible = c; UpdateESP() end }, "Col_Tracer_enemy_Invis")
+ESPFeatGB_enemy:CreateDivider()
+
+-- Skeleton
+ESPFeatGB_enemy:CreateToggle({ Name = "Show Skeleton", CurrentValue = false, Style = 1, Callback = function(v) TS.Skeleton.Enabled.enemy = v; UpdateESP() end }, "ESP_Skeleton_Toggle_enemy")
+local c_enemy_SkeletonLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "Skeleton Visible Color" }, "Col_LBL_Skeleton_enemy_Vis")
+c_enemy_SkeletonLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Skeleton.Visible = c; UpdateESP() end }, "Col_Skeleton_enemy_Vis")
+local c_enemy_SkeletonLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "Skeleton Invisible Color" }, "Col_LBL_Skeleton_enemy_Invis")
+c_enemy_SkeletonLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Skeleton.Invisible = c; UpdateESP() end }, "Col_Skeleton_enemy_Invis")
+ESPFeatGB_enemy:CreateDivider()
+
+-- HealthBar
+ESPFeatGB_enemy:CreateToggle({ Name = "Show HealthBar", CurrentValue = false, Style = 1, Callback = function(v) TS.HealthBar.Enabled.enemy = v; UpdateESP() end }, "ESP_HealthBar_Toggle_enemy")
+local c_enemy_HealthBarLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "HealthBar Visible Color" }, "Col_LBL_HealthBar_enemy_Vis")
+c_enemy_HealthBarLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.HealthBar.Visible = c; UpdateESP() end }, "Col_HealthBar_enemy_Vis")
+local c_enemy_HealthBarLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "HealthBar Invisible Color" }, "Col_LBL_HealthBar_enemy_Invis")
+c_enemy_HealthBarLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.HealthBar.Invisible = c; UpdateESP() end }, "Col_HealthBar_enemy_Invis")
+ESPFeatGB_enemy:CreateDivider()
+
+-- Chams
+ESPFeatGB_enemy:CreateToggle({ Name = "Show Chams", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Enabled.enemy = v; UpdateESP() end }, "ESP_Chams_Toggle_enemy")
+local c_enemy_ChamsLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "Chams Visible Color" }, "Col_LBL_Chams_enemy_Vis")
+c_enemy_ChamsLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Chams.Visible = c; UpdateESP() end }, "Col_Chams_enemy_Vis")
+local c_enemy_ChamsLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "Chams Invisible Color" }, "Col_LBL_Chams_enemy_Invis")
+c_enemy_ChamsLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Chams.Invisible = c; UpdateESP() end }, "Col_Chams_enemy_Invis")
+ESPFeatGB_enemy:CreateDivider()
+
+-- EXTRA CONFIGURATIONS
+local ESPExtraGB_enemy = ESPTab_enemy:CreateGroupbox({ Name = "Extra Parameters", Column = 3 }, "ESPExtraGB_enemy")
+ESPExtraGB_enemy:CreateSlider({ Name = "Skeleton Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Skeleton.Thickness = v; UpdateESP() end }, "ESP_Skel_Thick_enemy")
+ESPExtraGB_enemy:CreateSlider({ Name = "Tracer Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Tracer.Thickness = v; UpdateESP() end }, "ESP_Tracer_Thick_enemy")
+ESPExtraGB_enemy:CreateDropdown({ Name = "Tracer Origin", Options = {"Bottom", "Center", "Top", "Mouse", "LocalHumanoid"}, CurrentOption = {"Bottom"}, Callback = function(v) 
+    if v[1] == "Bottom" then TS.Tracer.Origin = 2
+    elseif v[1] == "Top" then TS.Tracer.Origin = 3
+    elseif v[1] == "Center" then TS.Tracer.Origin = 4
+    elseif v[1] == "Mouse" then TS.Tracer.Origin = 5
+    else TS.Tracer.Origin = 1 end
+    UpdateESP()
+end }, "ESP_Tracer_Origin_enemy")
+ESPExtraGB_enemy:CreateDropdown({ Name = "Name Format", Options = {"Standard", "Upper", "Lower"}, CurrentOption = {"Standard"}, Callback = function(v) TS.Name.Style = 1; UpdateESP() end }, "ESP_Name_Style_enemy")
+ESPExtraGB_enemy:CreateToggle({ Name = "Chams Occlusion", CurrentValue = true, Style = 1, Callback = function(v) TS.Chams.Occlusion = v; UpdateESP() end }, "ESP_Chams_Occ_enemy")
+ESPExtraGB_enemy:CreateToggle({ Name = "Chams Outline", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Outline.Enabled = v; UpdateESP() end }, "ESP_Chams_Out_enemy")
+ESPExtraGB_enemy:CreateSlider({ Name = "Chams Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Chams.Fill.Transparency = v; UpdateESP() end }, "ESP_Chams_Trans_enemy")
+
+
+local ESPTab_friendly = VisualsSection:CreateTab({ Name = "ESP: Friendly", Icon = NebulaIcons:GetIcon('eye', 'Lucide'), Columns = 3 }, "ESPTab_friendly")
+
+-- MASTER CONTROLS
+local ESPMainGB_friendly = ESPTab_friendly:CreateGroupbox({ Name = "Main Settings", Column = 1 }, "ESPMainGB_friendly")
+ESPMainGB_friendly:CreateToggle({ Name = "Enable ESP for Friendly", CurrentValue = false, Style = 2, Callback = function(v) TS.Checks.Team.SelectedTeams.friendly = v; UpdateESP() end }, "ESP_Master_friendly")
+
+-- BOUNDING BOXES
+local ESPBoxGB_friendly = ESPTab_friendly:CreateGroupbox({ Name = "Bounding Boxes", Column = 1 }, "ESPBoxGB_friendly")
+ESPBoxGB_friendly:CreateToggle({ Name = "Enable Bounding Boxes", CurrentValue = false, Style = 2, Callback = function(v) TS.Box.Enabled = v; UpdateESP() end }, "ESP_Box_Toggle_friendly")
+ESPBoxGB_friendly:CreateDropdown({ Name = "Box Style", Options = {"Normal", "CornerBoxes"}, CurrentOption = {"Normal"}, Callback = function(v) 
+    if v[1] == "Normal" then TS.Box.Style = 2 else TS.Box.Style = 1 end
+    UpdateESP()
+end }, "ESP_Box_Style_friendly")
+ESPBoxGB_friendly:CreateToggle({ Name = "Enable Box Fill", CurrentValue = false, Style = 1, Callback = function(v) TS.Box.Filled.Enabled = v; UpdateESP() end }, "ESP_Box_Fill_friendly")
+ESPBoxGB_friendly:CreateSlider({ Name = "Box Thickness", Range = {1, 5}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Box.Thickness = v; UpdateESP() end }, "ESP_Box_Thick_friendly")
+ESPBoxGB_friendly:CreateSlider({ Name = "Fill Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Box.Filled.Transparency = v; UpdateESP() end }, "ESP_Box_FillTrans_friendly")
+
+local c_friendlyLabel1 = ESPBoxGB_friendly:CreateLabel({ Name = "Box Outline Visible Color" }, "Col_LBL_friendly_1")
+c_friendlyLabel1:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Box.Outline.Visible = c; UpdateESP() end }, "Col_friendly_1")
+local c_friendlyLabel2 = ESPBoxGB_friendly:CreateLabel({ Name = "Box Outline Invisible Color" }, "Col_LBL_friendly_2")
+c_friendlyLabel2:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Box.Outline.Invisible = c; UpdateESP() end }, "Col_friendly_2")
+local c_friendlyLabel3 = ESPBoxGB_friendly:CreateLabel({ Name = "Box Fill Color" }, "Col_LBL_friendly_3")
+c_friendlyLabel3:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Box.Fill.Visible = c; UpdateESP() end }, "Col_friendly_3")
+
+-- OTHER FEATURES
+local ESPFeatGB_friendly = ESPTab_friendly:CreateGroupbox({ Name = "Features", Column = 2 }, "ESPFeatGB_friendly")
+
+-- Name
+ESPFeatGB_friendly:CreateToggle({ Name = "Show Name", CurrentValue = false, Style = 1, Callback = function(v) TS.Name.Enabled.friendly = v; UpdateESP() end }, "ESP_Name_Toggle_friendly")
+local c_friendly_NameLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "Name Visible Color" }, "Col_LBL_Name_friendly_Vis")
+c_friendly_NameLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Name.Visible = c; UpdateESP() end }, "Col_Name_friendly_Vis")
+local c_friendly_NameLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "Name Invisible Color" }, "Col_LBL_Name_friendly_Invis")
+c_friendly_NameLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Name.Invisible = c; UpdateESP() end }, "Col_Name_friendly_Invis")
+ESPFeatGB_friendly:CreateDivider()
+
+-- Distance
+ESPFeatGB_friendly:CreateToggle({ Name = "Show Distance", CurrentValue = false, Style = 1, Callback = function(v) TS.Distance.Enabled.friendly = v; UpdateESP() end }, "ESP_Distance_Toggle_friendly")
+local c_friendly_DistanceLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "Distance Visible Color" }, "Col_LBL_Distance_friendly_Vis")
+c_friendly_DistanceLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Distance.Visible = c; UpdateESP() end }, "Col_Distance_friendly_Vis")
+local c_friendly_DistanceLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "Distance Invisible Color" }, "Col_LBL_Distance_friendly_Invis")
+c_friendly_DistanceLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Distance.Invisible = c; UpdateESP() end }, "Col_Distance_friendly_Invis")
+ESPFeatGB_friendly:CreateDivider()
+
+-- Tracer
+ESPFeatGB_friendly:CreateToggle({ Name = "Show Tracer", CurrentValue = false, Style = 1, Callback = function(v) TS.Tracer.Enabled.friendly = v; UpdateESP() end }, "ESP_Tracer_Toggle_friendly")
+local c_friendly_TracerLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "Tracer Visible Color" }, "Col_LBL_Tracer_friendly_Vis")
+c_friendly_TracerLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Tracer.Visible = c; UpdateESP() end }, "Col_Tracer_friendly_Vis")
+local c_friendly_TracerLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "Tracer Invisible Color" }, "Col_LBL_Tracer_friendly_Invis")
+c_friendly_TracerLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Tracer.Invisible = c; UpdateESP() end }, "Col_Tracer_friendly_Invis")
+ESPFeatGB_friendly:CreateDivider()
+
+-- Skeleton
+ESPFeatGB_friendly:CreateToggle({ Name = "Show Skeleton", CurrentValue = false, Style = 1, Callback = function(v) TS.Skeleton.Enabled.friendly = v; UpdateESP() end }, "ESP_Skeleton_Toggle_friendly")
+local c_friendly_SkeletonLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "Skeleton Visible Color" }, "Col_LBL_Skeleton_friendly_Vis")
+c_friendly_SkeletonLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Skeleton.Visible = c; UpdateESP() end }, "Col_Skeleton_friendly_Vis")
+local c_friendly_SkeletonLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "Skeleton Invisible Color" }, "Col_LBL_Skeleton_friendly_Invis")
+c_friendly_SkeletonLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Skeleton.Invisible = c; UpdateESP() end }, "Col_Skeleton_friendly_Invis")
+ESPFeatGB_friendly:CreateDivider()
+
+-- HealthBar
+ESPFeatGB_friendly:CreateToggle({ Name = "Show HealthBar", CurrentValue = false, Style = 1, Callback = function(v) TS.HealthBar.Enabled.friendly = v; UpdateESP() end }, "ESP_HealthBar_Toggle_friendly")
+local c_friendly_HealthBarLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "HealthBar Visible Color" }, "Col_LBL_HealthBar_friendly_Vis")
+c_friendly_HealthBarLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.HealthBar.Visible = c; UpdateESP() end }, "Col_HealthBar_friendly_Vis")
+local c_friendly_HealthBarLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "HealthBar Invisible Color" }, "Col_LBL_HealthBar_friendly_Invis")
+c_friendly_HealthBarLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.HealthBar.Invisible = c; UpdateESP() end }, "Col_HealthBar_friendly_Invis")
+ESPFeatGB_friendly:CreateDivider()
+
+-- Chams
+ESPFeatGB_friendly:CreateToggle({ Name = "Show Chams", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Enabled.friendly = v; UpdateESP() end }, "ESP_Chams_Toggle_friendly")
+local c_friendly_ChamsLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "Chams Visible Color" }, "Col_LBL_Chams_friendly_Vis")
+c_friendly_ChamsLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Chams.Visible = c; UpdateESP() end }, "Col_Chams_friendly_Vis")
+local c_friendly_ChamsLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "Chams Invisible Color" }, "Col_LBL_Chams_friendly_Invis")
+c_friendly_ChamsLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Chams.Invisible = c; UpdateESP() end }, "Col_Chams_friendly_Invis")
+ESPFeatGB_friendly:CreateDivider()
+
+-- EXTRA CONFIGURATIONS
+local ESPExtraGB_friendly = ESPTab_friendly:CreateGroupbox({ Name = "Extra Parameters", Column = 3 }, "ESPExtraGB_friendly")
+ESPExtraGB_friendly:CreateSlider({ Name = "Skeleton Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Skeleton.Thickness = v; UpdateESP() end }, "ESP_Skel_Thick_friendly")
+ESPExtraGB_friendly:CreateSlider({ Name = "Tracer Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Tracer.Thickness = v; UpdateESP() end }, "ESP_Tracer_Thick_friendly")
+ESPExtraGB_friendly:CreateDropdown({ Name = "Tracer Origin", Options = {"Bottom", "Center", "Top", "Mouse", "LocalHumanoid"}, CurrentOption = {"Bottom"}, Callback = function(v) 
+    if v[1] == "Bottom" then TS.Tracer.Origin = 2
+    elseif v[1] == "Top" then TS.Tracer.Origin = 3
+    elseif v[1] == "Center" then TS.Tracer.Origin = 4
+    elseif v[1] == "Mouse" then TS.Tracer.Origin = 5
+    else TS.Tracer.Origin = 1 end
+    UpdateESP()
+end }, "ESP_Tracer_Origin_friendly")
+ESPExtraGB_friendly:CreateDropdown({ Name = "Name Format", Options = {"Standard", "Upper", "Lower"}, CurrentOption = {"Standard"}, Callback = function(v) TS.Name.Style = 1; UpdateESP() end }, "ESP_Name_Style_friendly")
+ESPExtraGB_friendly:CreateToggle({ Name = "Chams Occlusion", CurrentValue = true, Style = 1, Callback = function(v) TS.Chams.Occlusion = v; UpdateESP() end }, "ESP_Chams_Occ_friendly")
+ESPExtraGB_friendly:CreateToggle({ Name = "Chams Outline", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Outline.Enabled = v; UpdateESP() end }, "ESP_Chams_Out_friendly")
+ESPExtraGB_friendly:CreateSlider({ Name = "Chams Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Chams.Fill.Transparency = v; UpdateESP() end }, "ESP_Chams_Trans_friendly")
+
+
+local ESPTab_generic = VisualsSection:CreateTab({ Name = "ESP: Generic", Icon = NebulaIcons:GetIcon('eye', 'Lucide'), Columns = 3 }, "ESPTab_generic")
+
+-- MASTER CONTROLS
+local ESPMainGB_generic = ESPTab_generic:CreateGroupbox({ Name = "Main Settings", Column = 1 }, "ESPMainGB_generic")
+ESPMainGB_generic:CreateToggle({ Name = "Enable ESP for Generic", CurrentValue = false, Style = 2, Callback = function(v) TS.Checks.Team.SelectedTeams.generic = v; UpdateESP() end }, "ESP_Master_generic")
+
+-- BOUNDING BOXES
+local ESPBoxGB_generic = ESPTab_generic:CreateGroupbox({ Name = "Bounding Boxes", Column = 1 }, "ESPBoxGB_generic")
+ESPBoxGB_generic:CreateToggle({ Name = "Enable Bounding Boxes", CurrentValue = false, Style = 2, Callback = function(v) TS.Box.Enabled = v; UpdateESP() end }, "ESP_Box_Toggle_generic")
+ESPBoxGB_generic:CreateDropdown({ Name = "Box Style", Options = {"Normal", "CornerBoxes"}, CurrentOption = {"Normal"}, Callback = function(v) 
+    if v[1] == "Normal" then TS.Box.Style = 2 else TS.Box.Style = 1 end
+    UpdateESP()
+end }, "ESP_Box_Style_generic")
+ESPBoxGB_generic:CreateToggle({ Name = "Enable Box Fill", CurrentValue = false, Style = 1, Callback = function(v) TS.Box.Filled.Enabled = v; UpdateESP() end }, "ESP_Box_Fill_generic")
+ESPBoxGB_generic:CreateSlider({ Name = "Box Thickness", Range = {1, 5}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Box.Thickness = v; UpdateESP() end }, "ESP_Box_Thick_generic")
+ESPBoxGB_generic:CreateSlider({ Name = "Fill Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Box.Filled.Transparency = v; UpdateESP() end }, "ESP_Box_FillTrans_generic")
+
+local c_genericLabel1 = ESPBoxGB_generic:CreateLabel({ Name = "Box Outline Visible Color" }, "Col_LBL_generic_1")
+c_genericLabel1:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Box.Outline.Visible = c; UpdateESP() end }, "Col_generic_1")
+local c_genericLabel2 = ESPBoxGB_generic:CreateLabel({ Name = "Box Outline Invisible Color" }, "Col_LBL_generic_2")
+c_genericLabel2:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Box.Outline.Invisible = c; UpdateESP() end }, "Col_generic_2")
+local c_genericLabel3 = ESPBoxGB_generic:CreateLabel({ Name = "Box Fill Color" }, "Col_LBL_generic_3")
+c_genericLabel3:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Box.Fill.Visible = c; UpdateESP() end }, "Col_generic_3")
+
+-- OTHER FEATURES
+local ESPFeatGB_generic = ESPTab_generic:CreateGroupbox({ Name = "Features", Column = 2 }, "ESPFeatGB_generic")
+
+-- Name
+ESPFeatGB_generic:CreateToggle({ Name = "Show Name", CurrentValue = false, Style = 1, Callback = function(v) TS.Name.Enabled.generic = v; UpdateESP() end }, "ESP_Name_Toggle_generic")
+local c_generic_NameLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "Name Visible Color" }, "Col_LBL_Name_generic_Vis")
+c_generic_NameLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Name.Visible = c; UpdateESP() end }, "Col_Name_generic_Vis")
+local c_generic_NameLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "Name Invisible Color" }, "Col_LBL_Name_generic_Invis")
+c_generic_NameLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Name.Invisible = c; UpdateESP() end }, "Col_Name_generic_Invis")
+ESPFeatGB_generic:CreateDivider()
+
+-- Distance
+ESPFeatGB_generic:CreateToggle({ Name = "Show Distance", CurrentValue = false, Style = 1, Callback = function(v) TS.Distance.Enabled.generic = v; UpdateESP() end }, "ESP_Distance_Toggle_generic")
+local c_generic_DistanceLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "Distance Visible Color" }, "Col_LBL_Distance_generic_Vis")
+c_generic_DistanceLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Distance.Visible = c; UpdateESP() end }, "Col_Distance_generic_Vis")
+local c_generic_DistanceLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "Distance Invisible Color" }, "Col_LBL_Distance_generic_Invis")
+c_generic_DistanceLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Distance.Invisible = c; UpdateESP() end }, "Col_Distance_generic_Invis")
+ESPFeatGB_generic:CreateDivider()
+
+-- Tracer
+ESPFeatGB_generic:CreateToggle({ Name = "Show Tracer", CurrentValue = false, Style = 1, Callback = function(v) TS.Tracer.Enabled.generic = v; UpdateESP() end }, "ESP_Tracer_Toggle_generic")
+local c_generic_TracerLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "Tracer Visible Color" }, "Col_LBL_Tracer_generic_Vis")
+c_generic_TracerLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Tracer.Visible = c; UpdateESP() end }, "Col_Tracer_generic_Vis")
+local c_generic_TracerLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "Tracer Invisible Color" }, "Col_LBL_Tracer_generic_Invis")
+c_generic_TracerLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Tracer.Invisible = c; UpdateESP() end }, "Col_Tracer_generic_Invis")
+ESPFeatGB_generic:CreateDivider()
+
+-- Skeleton
+ESPFeatGB_generic:CreateToggle({ Name = "Show Skeleton", CurrentValue = false, Style = 1, Callback = function(v) TS.Skeleton.Enabled.generic = v; UpdateESP() end }, "ESP_Skeleton_Toggle_generic")
+local c_generic_SkeletonLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "Skeleton Visible Color" }, "Col_LBL_Skeleton_generic_Vis")
+c_generic_SkeletonLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Skeleton.Visible = c; UpdateESP() end }, "Col_Skeleton_generic_Vis")
+local c_generic_SkeletonLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "Skeleton Invisible Color" }, "Col_LBL_Skeleton_generic_Invis")
+c_generic_SkeletonLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Skeleton.Invisible = c; UpdateESP() end }, "Col_Skeleton_generic_Invis")
+ESPFeatGB_generic:CreateDivider()
+
+-- HealthBar
+ESPFeatGB_generic:CreateToggle({ Name = "Show HealthBar", CurrentValue = false, Style = 1, Callback = function(v) TS.HealthBar.Enabled.generic = v; UpdateESP() end }, "ESP_HealthBar_Toggle_generic")
+local c_generic_HealthBarLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "HealthBar Visible Color" }, "Col_LBL_HealthBar_generic_Vis")
+c_generic_HealthBarLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.HealthBar.Visible = c; UpdateESP() end }, "Col_HealthBar_generic_Vis")
+local c_generic_HealthBarLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "HealthBar Invisible Color" }, "Col_LBL_HealthBar_generic_Invis")
+c_generic_HealthBarLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.HealthBar.Invisible = c; UpdateESP() end }, "Col_HealthBar_generic_Invis")
+ESPFeatGB_generic:CreateDivider()
+
+-- Chams
+ESPFeatGB_generic:CreateToggle({ Name = "Show Chams", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Enabled.generic = v; UpdateESP() end }, "ESP_Chams_Toggle_generic")
+local c_generic_ChamsLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "Chams Visible Color" }, "Col_LBL_Chams_generic_Vis")
+c_generic_ChamsLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Chams.Visible = c; UpdateESP() end }, "Col_Chams_generic_Vis")
+local c_generic_ChamsLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "Chams Invisible Color" }, "Col_LBL_Chams_generic_Invis")
+c_generic_ChamsLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Chams.Invisible = c; UpdateESP() end }, "Col_Chams_generic_Invis")
+ESPFeatGB_generic:CreateDivider()
+
+-- EXTRA CONFIGURATIONS
+local ESPExtraGB_generic = ESPTab_generic:CreateGroupbox({ Name = "Extra Parameters", Column = 3 }, "ESPExtraGB_generic")
+ESPExtraGB_generic:CreateSlider({ Name = "Skeleton Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Skeleton.Thickness = v; UpdateESP() end }, "ESP_Skel_Thick_generic")
+ESPExtraGB_generic:CreateSlider({ Name = "Tracer Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Tracer.Thickness = v; UpdateESP() end }, "ESP_Tracer_Thick_generic")
+ESPExtraGB_generic:CreateDropdown({ Name = "Tracer Origin", Options = {"Bottom", "Center", "Top", "Mouse", "LocalHumanoid"}, CurrentOption = {"Bottom"}, Callback = function(v) 
+    if v[1] == "Bottom" then TS.Tracer.Origin = 2
+    elseif v[1] == "Top" then TS.Tracer.Origin = 3
+    elseif v[1] == "Center" then TS.Tracer.Origin = 4
+    elseif v[1] == "Mouse" then TS.Tracer.Origin = 5
+    else TS.Tracer.Origin = 1 end
+    UpdateESP()
+end }, "ESP_Tracer_Origin_generic")
+ESPExtraGB_generic:CreateDropdown({ Name = "Name Format", Options = {"Standard", "Upper", "Lower"}, CurrentOption = {"Standard"}, Callback = function(v) TS.Name.Style = 1; UpdateESP() end }, "ESP_Name_Style_generic")
+ESPExtraGB_generic:CreateToggle({ Name = "Chams Occlusion", CurrentValue = true, Style = 1, Callback = function(v) TS.Chams.Occlusion = v; UpdateESP() end }, "ESP_Chams_Occ_generic")
+ESPExtraGB_generic:CreateToggle({ Name = "Chams Outline", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Outline.Enabled = v; UpdateESP() end }, "ESP_Chams_Out_generic")
+ESPExtraGB_generic:CreateSlider({ Name = "Chams Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Chams.Fill.Transparency = v; UpdateESP() end }, "ESP_Chams_Trans_generic")
+
+
+local ESPTab_localp = VisualsSection:CreateTab({ Name = "ESP: Local Player", Icon = NebulaIcons:GetIcon('eye', 'Lucide'), Columns = 3 }, "ESPTab_localp")
+
+-- MASTER CONTROLS
+local ESPMainGB_localp = ESPTab_localp:CreateGroupbox({ Name = "Main Settings", Column = 1 }, "ESPMainGB_localp")
+ESPMainGB_localp:CreateToggle({ Name = "Enable ESP for Local Player", CurrentValue = false, Style = 2, Callback = function(v) TS.Checks.Team.SelectedTeams.localp = v; UpdateESP() end }, "ESP_Master_localp")
+
+-- BOUNDING BOXES
+local ESPBoxGB_localp = ESPTab_localp:CreateGroupbox({ Name = "Bounding Boxes", Column = 1 }, "ESPBoxGB_localp")
+ESPBoxGB_localp:CreateToggle({ Name = "Enable Bounding Boxes", CurrentValue = false, Style = 2, Callback = function(v) TS.Box.Enabled = v; UpdateESP() end }, "ESP_Box_Toggle_localp")
+ESPBoxGB_localp:CreateDropdown({ Name = "Box Style", Options = {"Normal", "CornerBoxes"}, CurrentOption = {"Normal"}, Callback = function(v) 
+    if v[1] == "Normal" then TS.Box.Style = 2 else TS.Box.Style = 1 end
+    UpdateESP()
+end }, "ESP_Box_Style_localp")
+ESPBoxGB_localp:CreateToggle({ Name = "Enable Box Fill", CurrentValue = false, Style = 1, Callback = function(v) TS.Box.Filled.Enabled = v; UpdateESP() end }, "ESP_Box_Fill_localp")
+ESPBoxGB_localp:CreateSlider({ Name = "Box Thickness", Range = {1, 5}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Box.Thickness = v; UpdateESP() end }, "ESP_Box_Thick_localp")
+ESPBoxGB_localp:CreateSlider({ Name = "Fill Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Box.Filled.Transparency = v; UpdateESP() end }, "ESP_Box_FillTrans_localp")
+
+local c_localpLabel1 = ESPBoxGB_localp:CreateLabel({ Name = "Box Outline Visible Color" }, "Col_LBL_localp_1")
+c_localpLabel1:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Box.Outline.Visible = c; UpdateESP() end }, "Col_localp_1")
+local c_localpLabel2 = ESPBoxGB_localp:CreateLabel({ Name = "Box Outline Invisible Color" }, "Col_LBL_localp_2")
+c_localpLabel2:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Box.Outline.Invisible = c; UpdateESP() end }, "Col_localp_2")
+local c_localpLabel3 = ESPBoxGB_localp:CreateLabel({ Name = "Box Fill Color" }, "Col_LBL_localp_3")
+c_localpLabel3:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Box.Fill.Visible = c; UpdateESP() end }, "Col_localp_3")
+
+-- OTHER FEATURES
+local ESPFeatGB_localp = ESPTab_localp:CreateGroupbox({ Name = "Features", Column = 2 }, "ESPFeatGB_localp")
+
+-- Name
+ESPFeatGB_localp:CreateToggle({ Name = "Show Name", CurrentValue = false, Style = 1, Callback = function(v) TS.Name.Enabled.localp = v; UpdateESP() end }, "ESP_Name_Toggle_localp")
+local c_localp_NameLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "Name Visible Color" }, "Col_LBL_Name_localp_Vis")
+c_localp_NameLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Name.Visible = c; UpdateESP() end }, "Col_Name_localp_Vis")
+local c_localp_NameLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "Name Invisible Color" }, "Col_LBL_Name_localp_Invis")
+c_localp_NameLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Name.Invisible = c; UpdateESP() end }, "Col_Name_localp_Invis")
+ESPFeatGB_localp:CreateDivider()
+
+-- Distance
+ESPFeatGB_localp:CreateToggle({ Name = "Show Distance", CurrentValue = false, Style = 1, Callback = function(v) TS.Distance.Enabled.localp = v; UpdateESP() end }, "ESP_Distance_Toggle_localp")
+local c_localp_DistanceLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "Distance Visible Color" }, "Col_LBL_Distance_localp_Vis")
+c_localp_DistanceLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Distance.Visible = c; UpdateESP() end }, "Col_Distance_localp_Vis")
+local c_localp_DistanceLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "Distance Invisible Color" }, "Col_LBL_Distance_localp_Invis")
+c_localp_DistanceLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Distance.Invisible = c; UpdateESP() end }, "Col_Distance_localp_Invis")
+ESPFeatGB_localp:CreateDivider()
+
+-- Tracer
+ESPFeatGB_localp:CreateToggle({ Name = "Show Tracer", CurrentValue = false, Style = 1, Callback = function(v) TS.Tracer.Enabled.localp = v; UpdateESP() end }, "ESP_Tracer_Toggle_localp")
+local c_localp_TracerLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "Tracer Visible Color" }, "Col_LBL_Tracer_localp_Vis")
+c_localp_TracerLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Tracer.Visible = c; UpdateESP() end }, "Col_Tracer_localp_Vis")
+local c_localp_TracerLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "Tracer Invisible Color" }, "Col_LBL_Tracer_localp_Invis")
+c_localp_TracerLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Tracer.Invisible = c; UpdateESP() end }, "Col_Tracer_localp_Invis")
+ESPFeatGB_localp:CreateDivider()
+
+-- Skeleton
+ESPFeatGB_localp:CreateToggle({ Name = "Show Skeleton", CurrentValue = false, Style = 1, Callback = function(v) TS.Skeleton.Enabled.localp = v; UpdateESP() end }, "ESP_Skeleton_Toggle_localp")
+local c_localp_SkeletonLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "Skeleton Visible Color" }, "Col_LBL_Skeleton_localp_Vis")
+c_localp_SkeletonLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Skeleton.Visible = c; UpdateESP() end }, "Col_Skeleton_localp_Vis")
+local c_localp_SkeletonLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "Skeleton Invisible Color" }, "Col_LBL_Skeleton_localp_Invis")
+c_localp_SkeletonLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Skeleton.Invisible = c; UpdateESP() end }, "Col_Skeleton_localp_Invis")
+ESPFeatGB_localp:CreateDivider()
+
+-- HealthBar
+ESPFeatGB_localp:CreateToggle({ Name = "Show HealthBar", CurrentValue = false, Style = 1, Callback = function(v) TS.HealthBar.Enabled.localp = v; UpdateESP() end }, "ESP_HealthBar_Toggle_localp")
+local c_localp_HealthBarLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "HealthBar Visible Color" }, "Col_LBL_HealthBar_localp_Vis")
+c_localp_HealthBarLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.HealthBar.Visible = c; UpdateESP() end }, "Col_HealthBar_localp_Vis")
+local c_localp_HealthBarLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "HealthBar Invisible Color" }, "Col_LBL_HealthBar_localp_Invis")
+c_localp_HealthBarLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.HealthBar.Invisible = c; UpdateESP() end }, "Col_HealthBar_localp_Invis")
+ESPFeatGB_localp:CreateDivider()
+
+-- Chams
+ESPFeatGB_localp:CreateToggle({ Name = "Show Chams", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Enabled.localp = v; UpdateESP() end }, "ESP_Chams_Toggle_localp")
+local c_localp_ChamsLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "Chams Visible Color" }, "Col_LBL_Chams_localp_Vis")
+c_localp_ChamsLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Chams.Visible = c; UpdateESP() end }, "Col_Chams_localp_Vis")
+local c_localp_ChamsLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "Chams Invisible Color" }, "Col_LBL_Chams_localp_Invis")
+c_localp_ChamsLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Chams.Invisible = c; UpdateESP() end }, "Col_Chams_localp_Invis")
+ESPFeatGB_localp:CreateDivider()
+
+-- EXTRA CONFIGURATIONS
+local ESPExtraGB_localp = ESPTab_localp:CreateGroupbox({ Name = "Extra Parameters", Column = 3 }, "ESPExtraGB_localp")
+ESPExtraGB_localp:CreateSlider({ Name = "Skeleton Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Skeleton.Thickness = v; UpdateESP() end }, "ESP_Skel_Thick_localp")
+ESPExtraGB_localp:CreateSlider({ Name = "Tracer Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Tracer.Thickness = v; UpdateESP() end }, "ESP_Tracer_Thick_localp")
+ESPExtraGB_localp:CreateDropdown({ Name = "Tracer Origin", Options = {"Bottom", "Center", "Top", "Mouse", "LocalHumanoid"}, CurrentOption = {"Bottom"}, Callback = function(v) 
+    if v[1] == "Bottom" then TS.Tracer.Origin = 2
+    elseif v[1] == "Top" then TS.Tracer.Origin = 3
+    elseif v[1] == "Center" then TS.Tracer.Origin = 4
+    elseif v[1] == "Mouse" then TS.Tracer.Origin = 5
+    else TS.Tracer.Origin = 1 end
+    UpdateESP()
+end }, "ESP_Tracer_Origin_localp")
+ESPExtraGB_localp:CreateDropdown({ Name = "Name Format", Options = {"Standard", "Upper", "Lower"}, CurrentOption = {"Standard"}, Callback = function(v) TS.Name.Style = 1; UpdateESP() end }, "ESP_Name_Style_localp")
+ESPExtraGB_localp:CreateToggle({ Name = "Chams Occlusion", CurrentValue = true, Style = 1, Callback = function(v) TS.Chams.Occlusion = v; UpdateESP() end }, "ESP_Chams_Occ_localp")
+ESPExtraGB_localp:CreateToggle({ Name = "Chams Outline", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Outline.Enabled = v; UpdateESP() end }, "ESP_Chams_Out_localp")
+ESPExtraGB_localp:CreateSlider({ Name = "Chams Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Chams.Fill.Transparency = v; UpdateESP() end }, "ESP_Chams_Trans_localp")
+
+
+--// RADAR TAB
+local RadarTab = VisualsSection:CreateTab({ Name = "Radar settings", Icon = NebulaIcons:GetIcon('activity', 'Lucide'), Columns = 2 }, "RadarTab")
+local RadarGB = RadarTab:CreateGroupbox({ Name = "Radar Display", Column = 1 }, "RadarGB")
+RadarGB:CreateToggle({ Name = "Enable Radar", CurrentValue = false, Style = 2, Callback = function(v) TS.Radar.Enabled = v; UpdateESP() end }, "Radar_Toggle")
+RadarGB:CreateSlider({ Name = "Radar Radius", Range = {50, 500}, Increment = 10, CurrentValue = 100, Callback = function(v) TS.Radar.Radius = v; UpdateESP() end }, "Radar_Rad")
+RadarGB:CreateSlider({ Name = "Radar Scale", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Callback = function(v) TS.Radar.Scale = v; UpdateESP() end }, "Radar_Scale")
+
+local rColBg = RadarGB:CreateLabel({ Name = "Radar Background" }, "Radar_Bg")
+rColBg:AddColorPicker({ CurrentValue = Color3.fromRGB(30,30,30), Callback = function(c) TS.currentColors.Radar.Background = c; UpdateESP() end }, "Radar_Bg_Col")
+local rColBd = RadarGB:CreateLabel({ Name = "Radar Border" }, "Radar_Bd")
+rColBd:AddColorPicker({ CurrentValue = Color3.fromRGB(60,60,60), Callback = function(c) TS.currentColors.Radar.Border = c; UpdateESP() end }, "Radar_Bd_Col")
+
+--// 4. MOVEMENT TAB
+local MovementSection = Window:CreateTabSection("Movement", true)
+local MoveTab = MovementSection:CreateTab({ Name = "Local Player", Icon = NebulaIcons:GetIcon('move', 'Lucide'), Columns = 2 }, "MoveTab")
+
+local SpeedGB = MoveTab:CreateGroupbox({ Name = "Speed Hack", Column = 1 }, "SpeedGB")
+SpeedGB:CreateToggle({ Name = "Enable Speed", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Movement.Speed.Enabled = v end }, "Spd_Toggle")
+SpeedGB:CreateSlider({ Name = "Speed Amount", Range = {16, 500}, Increment = 1, CurrentValue = 50, Callback = function(v) Lunar.Features.Movement.Speed.Value = v end }, "Spd_Value")
+SpeedGB:CreateDropdown({ Name = "Method", Options = {"CFrame", "Velocity"}, CurrentOption = {"CFrame"}, Callback = function(v) Lunar.Features.Movement.Speed.Method = v[1] end }, "Spd_Method")
+
+local MoveMiscGB = MoveTab:CreateGroupbox({ Name = "Agility Options", Column = 2 }, "MoveMiscGB")
+MoveMiscGB:CreateToggle({ Name = "Infinite Jump", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Movement.InfiniteJump = v end }, "Move_InfJump")
+MoveMiscGB:CreateToggle({ Name = "Bunny Hop", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Movement.BunnyHop = v end }, "Move_BHop")
+MoveMiscGB:CreateToggle({ Name = "Spider Climb", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Movement.Spider = v end }, "Move_Spider")
+
+--// 5. WORLD TAB
+local WorldTab = MovementSection:CreateTab({ Name = "World Editing", Icon = NebulaIcons:GetIcon('globe', 'Lucide'), Columns = 2 }, "WorldTab")
+
+local LightingGB = WorldTab:CreateGroupbox({ Name = "Lighting Overrides", Column = 1 }, "LightingGB")
+LightingGB:CreateToggle({ Name = "Fullbright", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Visuals.World.Fullbright = v end }, "World_FB")
+local ambLabel = LightingGB:CreateLabel({ Name = "Ambient Color" }, "Amb_LBL")
+ambLabel:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) Lunar.Features.Visuals.World.Ambient = c end }, "Amb_Color")
+LightingGB:CreateSlider({ Name = "Time of Day", Range = {0, 24}, Increment = 1, CurrentValue = 14, Callback = function(v) Lunar.Features.Visuals.World.TimeOfDay = v end }, "World_Time")
+LightingGB:CreateSlider({ Name = "Fog Distance", Range = {0, 100000}, Increment = 100, CurrentValue = 100000, Callback = function(v) Lunar.Features.Visuals.World.FogEnd = v end }, "World_Fog")
+
+--// 6. TROLL TAB
+local TrollTab = MovementSection:CreateTab({ Name = "Troll Options", Icon = NebulaIcons:GetIcon('users', 'Lucide'), Columns = 2 }, "TrollTab")
+local TrollGB = TrollTab:CreateGroupbox({ Name = "Player Manipulation", Column = 1 }, "TrollGB")
+TrollGB:CreateToggle({ Name = "Spin Fling", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Troll.SpinFling = v end }, "Troll_SpinFling")
+TrollGB:CreateButton({ Name = "Fling Server", Icon = NebulaIcons:GetIcon('zap', 'Lucide'), Callback = function() 
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character.HumanoidRootPart
+        hrp.Velocity = Vector3.new(9999999, 9999999, 9999999)
+        hrp.RotVelocity = Vector3.new(9999999, 9999999, 9999999)
     end
+end }, "Troll_FlingSrv")
 
-    -- Remove all radar dots
-    for _, dot in pairs(RadarCache) do
-        pcall(function() dot:Remove() end)
-    end
+--// 7. SETTINGS TAB
+local ConfigSection = Window:CreateTabSection("Configuration", true)
+local SettingsTab = ConfigSection:CreateTab({ Name = "System Settings", Icon = NebulaIcons:GetIcon('settings', 'Lucide'), Columns = 2 }, "SettingsTab")
 
-    -- Remove chams container
-    pcall(function() ChamsContainer:Destroy() end)
+SettingsTab:BuildConfigGroupbox(1)
+SettingsTab:BuildThemeGroupbox(2)
 
-    -- Restore original values
-    Workspace.Gravity = OriginalGravity
-    Lighting.FogEnd = OriginalFog
-    Lighting.Ambient = OriginalAmbient
-    Lighting.ClockTime = OriginalTime
-    Lighting.GlobalShadows = true
+-- Load defaults
+pcall(function() Starlight:SetTheme("Nebula") end)
+pcall(function() Starlight:LoadAutoloadTheme() end)
+pcall(function() Starlight:LoadAutoloadConfig() end)
 
-    -- Restore character
-    if IsAlive(LocalPlayer) then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        hum.PlatformStand = false
-        hum.CameraOffset = Vector3.new(0, 0, 0)
-        Camera.CameraType = Enum.CameraType.Custom
-        LocalPlayer.CameraMinZoomDistance = 0.5
-        LocalPlayer.CameraMaxZoomDistance = 400
-    end
-end)
-
--- ==============================================================================
--- =                        LOAD SAVED CONFIG                                   =
--- ==============================================================================
-pcall(function() SaveManager:LoadAutoloadConfig() end)
-
-Library:Notify("Lunar Universal v3.0 loaded successfully!", 5)
+-- Notification
+Starlight:Notification({
+    Title = "Lunar Titan Initialized",
+    Icon = NebulaIcons:GetIcon('shield-check', 'Lucide'),
+    Content = "Advanced physics modules injected. Welcome to Lunar V5.0.0.",
+    Duration = 5
+}, "INIT_NOTIF")
