@@ -1,11 +1,19 @@
 -- ==============================================================================
--- LUNAR UNIVERSAL SCRIPT | ELITE EDITION
--- Version: 2.0.0
--- Description: The ultimate, most advanced universal script for Roblox.
--- This script contains 1000+ lines of raw, unadulterated power.
+-- LUNAR UNIVERSAL SCRIPT | THE ZENITH EXPERIENCE
+-- Version: 3.0.0
+-- Lines: 1500+
+-- Built with: Linoria Lib (violin-suzutsuki)
 -- ==============================================================================
 
-local repo = 'https://raw.githubusercontent.com/violin-xd/LinoriaLib/main/'
+-- // Wait for the game to finish loading before doing anything
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+task.wait(1)
+
+-- // Safe Linoria Lib Loading (correct repo URL)
+local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+
 local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
 local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
 local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
@@ -13,914 +21,1887 @@ local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
 -- ==========================================
 -- =              SERVICES                  =
 -- ==========================================
-local Players = game:GetService('Players')
-local RunService = game:GetService('RunService')
-local UserInputService = game:GetService('UserInputService')
-local Workspace = game:GetService('Workspace')
-local Lighting = game:GetService('Lighting')
-local VirtualUser = game:GetService('VirtualUser')
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local VirtualUser = game:GetService("VirtualUser")
 local ProximityPromptService = game:GetService("ProximityPromptService")
-local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
 
+-- ==========================================
+-- =             REFERENCES                 =
+-- ==========================================
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
 -- ==========================================
--- =           GLOBAL VARIABLES             =
+-- =           STATE VARIABLES              =
 -- ==========================================
-local LunarGlobals = {
-    Waypoints = {},
-    DeathPos = nil,
-    LastServerPos = nil,
-    ESPObjects = {},
-    RadarDots = {},
-    ChamsFolder = Instance.new("Folder", CoreGui),
-    Flying = false,
-    FlySpeed = 50,
-    FreecamEnabled = false,
-    FreecamCFrame = CFrame.new(),
-    TargetPlayer = nil,
-    TickCount = 0
-}
-LunarGlobals.ChamsFolder.Name = "LunarChams"
-
-local Drawings = {
-    FOVCircle = Drawing.new("Circle"),
-    TargetLine = Drawing.new("Line"),
-    RadarBG = Drawing.new("Square"),
-    RadarBorder = Drawing.new("Square")
-}
-
--- Setup Base Drawings
-Drawings.FOVCircle.Filled = false
-Drawings.FOVCircle.Thickness = 1
-Drawings.FOVCircle.Visible = false
-
-Drawings.TargetLine.Thickness = 1
-Drawings.TargetLine.Visible = false
-
-Drawings.RadarBG.Filled = true
-Drawings.RadarBG.Transparency = 0.8
-Drawings.RadarBG.Visible = false
-
-Drawings.RadarBorder.Filled = false
-Drawings.RadarBorder.Thickness = 2
-Drawings.RadarBorder.Visible = false
+local WaypointStore = {}
+local DeathPosition = nil
+local FreecamActive = false
+local FreecamStoredCFrame = CFrame.new()
+local StickyTarget = nil
+local TickCounter = 0
+local OriginalGravity = Workspace.Gravity
+local OriginalFog = Lighting.FogEnd
+local OriginalAmbient = Lighting.Ambient
+local OriginalTime = Lighting.ClockTime
+local TriggerCooldown = false
+local ESPCache = {}
+local RadarCache = {}
+local ItemESPCache = {}
 
 -- ==========================================
--- =              UI SETUP                  =
+-- =       SAFE DRAWING CONSTRUCTOR         =
 -- ==========================================
--- Note: Removed GetProductInfo to prevent yielding/crashing before UI loads!
+-- Some executors don't support Drawing API. We create a safe wrapper.
+local DrawingSupported = (Drawing ~= nil and Drawing.new ~= nil)
+
+local function NewDrawing(drawingType)
+    if not DrawingSupported then
+        return setmetatable({}, {__index = function() return function() end end, __newindex = function() end})
+    end
+    local ok, obj = pcall(Drawing.new, drawingType)
+    if ok then return obj end
+    return setmetatable({}, {__index = function() return function() end end, __newindex = function() end})
+end
+
+-- ==========================================
+-- =           DRAWING OBJECTS              =
+-- ==========================================
+local FOVCircle = NewDrawing("Circle")
+FOVCircle.Thickness = 1
+FOVCircle.Filled = false
+FOVCircle.Transparency = 1
+FOVCircle.Visible = false
+
+local TargetLine = NewDrawing("Line")
+TargetLine.Thickness = 1
+TargetLine.Visible = false
+
+local RadarBackground = NewDrawing("Square")
+RadarBackground.Filled = true
+RadarBackground.Thickness = 1
+RadarBackground.Visible = false
+
+local RadarBorder = NewDrawing("Square")
+RadarBorder.Filled = false
+RadarBorder.Thickness = 2
+RadarBorder.Color = Color3.fromRGB(139, 92, 246)
+RadarBorder.Visible = false
+
+local RadarCenter = NewDrawing("Circle")
+RadarCenter.Filled = true
+RadarCenter.Radius = 3
+RadarCenter.Color = Color3.fromRGB(255, 255, 255)
+RadarCenter.Visible = false
+
+local DeathMarker = NewDrawing("Circle")
+DeathMarker.Filled = true
+DeathMarker.Radius = 5
+DeathMarker.Color = Color3.fromRGB(255, 0, 0)
+DeathMarker.Visible = false
+
+-- ==========================================
+-- =        CHAMS CONTAINER (Highlight)     =
+-- ==========================================
+local ChamsContainer = Instance.new("Folder")
+ChamsContainer.Name = "LunarChamsESP"
+pcall(function()
+    ChamsContainer.Parent = (gethui and gethui()) or game:GetService("CoreGui")
+end)
+
+-- ==============================================================================
+-- =                        UI WINDOW & TABS                                    =
+-- ==============================================================================
 local Window = Library:CreateWindow({
-    Title = 'Lunar Universal | The Zenith Experience',
-    Center = true, 
-    AutoShow = true, 
-    TabPadding = 8, 
+    Title = 'Lunar Universal | v3.0',
+    Center = true,
+    AutoShow = true,
+    TabPadding = 8,
     MenuFadeTime = 0.2
 })
 
 local Tabs = {
-    Self = Window:AddTab('Self'),
-    Players = Window:AddTab('Players'),
-    Visuals = Window:AddTab('Visuals'),
-    Aimbot = Window:AddTab('Aimbot'),
-    TriggerRadar = Window:AddTab('Trigger & Radar'),
-    Rage = Window:AddTab('Rage'),
-    Teleport = Window:AddTab('Teleport'),
-    WorldMisc = Window:AddTab('World & Misc'),
-    Settings = Window:AddTab('Settings')
+    Self        = Window:AddTab('Self'),
+    Players     = Window:AddTab('Players'),
+    Visuals     = Window:AddTab('Visuals'),
+    Aimbot      = Window:AddTab('Aimbot'),
+    TriggerBot  = Window:AddTab('TriggerBot'),
+    Radar       = Window:AddTab('Radar'),
+    Rage        = Window:AddTab('Rage'),
+    Teleport    = Window:AddTab('Teleport'),
+    World       = Window:AddTab('World'),
+    Misc        = Window:AddTab('Misc'),
+    Settings    = Window:AddTab('Settings'),
 }
 
--- ==========================================
--- =                 SELF                   =
--- ==========================================
-local MovementBox = Tabs.Self:AddLeftGroupbox('Movement')
-MovementBox:AddToggle('Fly', {Text = 'Fly (CFrame)'}):AddKeyPicker('FlyKey', {Default = 'F', SyncToggleState = true, Mode = 'Toggle', Text = 'Fly'})
-MovementBox:AddSlider('FlySpeed', {Text = 'Fly Speed', Default = 50, Min = 16, Max = 500, Rounding = 0})
-MovementBox:AddToggle('NoClip', {Text = 'No Clip'}):AddKeyPicker('NoClipKey', {Default = 'N', SyncToggleState = true, Mode = 'Toggle', Text = 'No Clip'})
-MovementBox:AddToggle('InfJump', {Text = 'Infinite Jump'})
-MovementBox:AddToggle('Speedhack', {Text = 'Speedhack'})
-MovementBox:AddSlider('SpeedhackSpeed', {Text = 'Speed', Default = 100, Min = 16, Max = 500, Rounding = 0})
-MovementBox:AddToggle('JumpBoost', {Text = 'Jump Boost'})
-MovementBox:AddSlider('JumpBoostHeight', {Text = 'Height', Default = 100, Min = 50, Max = 500, Rounding = 0})
-MovementBox:AddToggle('JetPack', {Text = 'Jet Pack (Hold Space)'})
-MovementBox:AddToggle('AirSwim', {Text = 'Air Swim'})
-
-local CharacterBox = Tabs.Self:AddRightGroupbox('Character Modification')
-CharacterBox:AddToggle('WalkFling', {Text = 'Walk Fling (Spin)'})
-CharacterBox:AddToggle('LongNeck', {Text = 'Camera Offset (Over Walls)'})
-CharacterBox:AddSlider('LongNeckHeight', {Text = 'Height Offset', Default = 5, Min = 1, Max = 20, Rounding = 1})
-CharacterBox:AddToggle('HandChams', {Text = 'Hand Chams'})
-CharacterBox:AddDropdown('HandMaterial', {Values = {'ForceField', 'Neon', 'Plastic', 'Glass'}, Default = 1, Multi = false, Text = 'Material'})
-CharacterBox:AddColorPicker('HandColor', {Default = Color3.new(1, 0, 0), Title = 'Hand Color'})
-CharacterBox:AddSlider('HandTransparency', {Text = 'Transparency', Default = 0.5, Min = 0, Max = 1, Rounding = 1})
-
--- ==========================================
--- =               PLAYERS                  =
--- ==========================================
-local PlayerSelectBox = Tabs.Players:AddLeftGroupbox('Player Selection')
-PlayerSelectBox:AddDropdown('SelectedPlayer', {Values = {'None'}, Default = 1, Multi = false, Text = 'Select Player'})
-PlayerSelectBox:AddButton('Refresh Players', function()
-    local list = {'None'}
-    for _, v in pairs(Players:GetPlayers()) do 
-        if v ~= LocalPlayer then table.insert(list, v.Name) end 
-    end
-    Options.SelectedPlayer:SetValues(list)
-end)
-
-local PlayerActionsBox = Tabs.Players:AddRightGroupbox('Actions')
-PlayerActionsBox:AddButton('Teleport to player', function()
-    local p = Players:FindFirstChild(Options.SelectedPlayer.Value)
-    if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character then
-        LocalPlayer.Character:PivotTo(p.Character.HumanoidRootPart.CFrame)
-    end
-end)
-PlayerActionsBox:AddToggle('AttachPlayer', {Text = 'Attach to Player'})
-PlayerActionsBox:AddSlider('AttachDistance', {Text = 'Distance', Default = 5, Min = 0, Max = 20, Rounding = 1})
-PlayerActionsBox:AddToggle('Spectate', {Text = 'Spectate'})
-PlayerActionsBox:AddToggle('LookAt', {Text = 'Look At Player'})
-PlayerActionsBox:AddToggle('TargetFling', {Text = 'Fling Target Player'})
-PlayerActionsBox:AddButton('Copy Username', function() if setclipboard then setclipboard(Options.SelectedPlayer.Value) end end)
-PlayerActionsBox:AddButton('Copy User ID', function() 
-    local p = Players:FindFirstChild(Options.SelectedPlayer.Value)
-    if p and setclipboard then setclipboard(tostring(p.UserId)) end
-end)
-
-local FriendsBox = Tabs.Players:AddLeftGroupbox('Advanced Friends System')
-FriendsBox:AddToggle('IgnoreFriends', {Text = 'Ignore friends from aimbot/esp'})
-FriendsBox:AddBind('AddFriendBind', {Text = 'Add Friend Bind', Default = 'MiddleMouseButton'})
-
--- ==========================================
--- =               VISUALS                  =
--- ==========================================
-local ESPBox = Tabs.Visuals:AddLeftGroupbox('ESP Features')
-ESPBox:AddToggle('ESPBox', {Text = 'Box'})
-ESPBox:AddToggle('ESPName', {Text = 'Name'})
-ESPBox:AddToggle('ESPHealthText', {Text = 'Health Text'})
-ESPBox:AddToggle('ESPHealthBar', {Text = 'Health Bar'})
-ESPBox:AddToggle('ESPWeapon', {Text = 'Current Weapon'})
-ESPBox:AddToggle('ESPTracers', {Text = 'Tracers'})
-ESPBox:AddToggle('ESPDistance', {Text = 'Distance'})
-ESPBox:AddToggle('ESPSkeleton', {Text = 'Skeleton'})
-ESPBox:AddToggle('ESPHeadDot', {Text = 'Head Dot'})
-
-local ChamsBox = Tabs.Visuals:AddRightGroupbox('Chams')
-ChamsBox:AddToggle('ESPChams', {Text = 'Player Chams'})
-ChamsBox:AddToggle('ESPChamsWallCheck', {Text = 'Chams Wall Check'})
-ChamsBox:AddColorPicker('ChamsColor', {Default = Color3.new(1,0,0), Title = 'Chams Color'})
-ChamsBox:AddColorPicker('ChamsOutlineColor', {Default = Color3.new(1,1,1), Title = 'Chams Outline'})
-ChamsBox:AddSlider('ChamsTransparency', {Text = 'Fill Transparency', Default = 0.5, Min = 0, Max = 1, Rounding = 1})
-ChamsBox:AddSlider('ChamsOutlineTrans', {Text = 'Outline Transparency', Default = 0, Min = 0, Max = 1, Rounding = 1})
-
-local ESPOptions = Tabs.Visuals:AddLeftGroupbox('ESP Options')
-ESPOptions:AddToggle('ESPTeamCheck', {Text = 'Team Check'})
-ESPOptions:AddSlider('ESPMaxDistance', {Text = 'Max Distance', Default = 5000, Min = 100, Max = 10000, Rounding = 0})
-ESPOptions:AddColorPicker('ESPColorTarget', {Default = Color3.new(1,0,0), Title = 'Target Color'})
-ESPOptions:AddColorPicker('ESPColorAlly', {Default = Color3.new(0,1,0), Title = 'Ally Color'})
-
--- ==========================================
--- =                AIMBOT                  =
--- ==========================================
-local AimbotMain = Tabs.Aimbot:AddLeftGroupbox('Main')
-AimbotMain:AddDropdown('AimMethod', {Values = {'Camera', 'Mouse', 'Silent Aim (Hook)'}, Default = 1, Multi = false, Text = 'Method'})
-AimbotMain:AddDropdown('AimMode', {Values = {'Hold', 'Toggle'}, Default = 1, Multi = false, Text = 'Mode'})
-AimbotMain:AddBind('AimKey', {Text = 'Custom Aim Key', Default = 'MouseButton2'})
-AimbotMain:AddDropdown('AimPart', {Values = {'Head', 'HumanoidRootPart', 'UpperTorso'}, Default = 1, Multi = false, Text = 'Aim Part'})
-AimbotMain:AddDropdown('AimPriority', {Values = {'FOV', 'Distance', 'Health'}, Default = 1, Multi = false, Text = 'Priority'})
-
-local AimbotSet = Tabs.Aimbot:AddRightGroupbox('Settings')
-AimbotSet:AddSlider('AimSmoothness', {Text = 'Smoothness', Default = 1, Min = 1, Max = 10, Rounding = 1})
-AimbotSet:AddToggle('AimPrediction', {Text = 'Velocity Prediction'})
-AimbotSet:AddSlider('PredictionAmount', {Text = 'Prediction Factor', Default = 0.165, Min = 0, Max = 1, Rounding = 3})
-AimbotSet:AddToggle('BulletDrop', {Text = 'Bullet Drop Compensation'})
-AimbotSet:AddToggle('AimShake', {Text = 'Aim Shake (Bypass Recoil Check)'})
-AimbotSet:AddSlider('ShakeIntensity', {Text = 'Shake Intensity', Default = 5, Min = 1, Max = 20, Rounding = 1})
-AimbotSet:AddSlider('HitChance', {Text = 'Hit Chance %', Default = 100, Min = 0, Max = 100, Rounding = 0})
-
-local AimbotFOV = Tabs.Aimbot:AddLeftGroupbox('FOV & Targets')
-AimbotFOV:AddToggle('ShowFOV', {Text = 'Show FOV Circle'})
-AimbotFOV:AddSlider('FOVRadius', {Text = 'FOV Size', Default = 100, Min = 10, Max = 1000, Rounding = 0})
-AimbotFOV:AddColorPicker('FOVColor', {Default = Color3.new(1,1,1), Title = 'FOV Color'})
-AimbotFOV:AddToggle('TargetLine', {Text = 'Target Line'})
-AimbotFOV:AddToggle('AimTeamCheck', {Text = 'Team Check'})
-AimbotFOV:AddToggle('AimWallCheck', {Text = 'Wall Check (Raycast)'})
-AimbotFOV:AddToggle('StickyAim', {Text = 'Sticky Aim'})
-
--- ==========================================
--- =           TRIGGER & RADAR              =
--- ==========================================
-local TriggerBox = Tabs.TriggerRadar:AddLeftGroupbox('Trigger Bot')
-TriggerBox:AddToggle('TriggerBot', {Text = 'Enable'})
-TriggerBox:AddToggle('TriggerTeamCheck', {Text = 'Team Check'})
-TriggerBox:AddToggle('TriggerHold', {Text = 'Hold Mode'}):AddKeyPicker('TriggerKey', {Default = 'V', Text = 'Trigger Key'})
-TriggerBox:AddSlider('TriggerMinDelay', {Text = 'Min Delay', Default = 0, Min = 0, Max = 1, Rounding = 2})
-TriggerBox:AddSlider('TriggerMaxDelay', {Text = 'Max Delay', Default = 0.1, Min = 0, Max = 1, Rounding = 2})
-TriggerBox:AddSlider('TriggerCPS', {Text = 'Custom CPS', Default = 10, Min = 1, Max = 20, Rounding = 0})
-TriggerBox:AddSlider('TriggerMissChance', {Text = 'Miss Chance %', Default = 0, Min = 0, Max = 100, Rounding = 0})
-
-local RadarBox = Tabs.TriggerRadar:AddRightGroupbox('Radar')
-RadarBox:AddToggle('RadarEnable', {Text = 'Enable Minimap'})
-RadarBox:AddToggle('RadarNames', {Text = 'Show Names'})
-RadarBox:AddToggle('RadarTeamCheck', {Text = 'Team Check'})
-RadarBox:AddSlider('RadarSize', {Text = 'Radar Size', Default = 200, Min = 100, Max = 500, Rounding = 0})
-RadarBox:AddSlider('RadarZoom', {Text = 'Zoom Factor', Default = 1, Min = 0.1, Max = 5, Rounding = 1})
-RadarBox:AddSlider('RadarTransparency', {Text = 'Transparency', Default = 0.8, Min = 0, Max = 1, Rounding = 2})
-RadarBox:AddColorPicker('RadarColor', {Default = Color3.new(0.05,0.05,0.05), Title = 'Background Color'})
-
--- ==========================================
--- =                  RAGE                  =
--- ==========================================
-local RageBox = Tabs.Rage:AddLeftGroupbox('Exploits')
-RageBox:AddToggle('SpinBot', {Text = 'Spin Bot (Anti-Hit)'})
-RageBox:AddSlider('SpinSpeed', {Text = 'Spin Speed', Default = 50, Min = 10, Max = 100, Rounding = 0})
-RageBox:AddDropdown('AntiAim', {Values = {'None', 'Jitter', 'Inverse'}, Default = 1, Multi = false, Text = 'Anti Aim'})
-RageBox:AddToggle('TPAllLoop', {Text = 'TP All Players Loop (Visual)'})
-RageBox:AddToggle('RaknetDesync', {Text = 'Raknet Desync'}):AddKeyPicker('DesyncKey', {Default = 'X', Text = 'Desync Bind'})
-RageBox:AddToggle('ShowServerPos', {Text = 'Show last server position'})
-
-local HitboxBox = Tabs.Rage:AddRightGroupbox('Hitbox Expander')
-HitboxBox:AddToggle('ExpandHitboxes', {Text = 'Enable'})
-HitboxBox:AddToggle('HeadOnlyMode', {Text = 'Head only mode'})
-HitboxBox:AddToggle('ShowHitboxes', {Text = 'Show hitboxes'})
-HitboxBox:AddSlider('HitboxSize', {Text = 'Custom Size', Default = 5, Min = 1, Max = 50, Rounding = 1})
-HitboxBox:AddSlider('HitboxTransparency', {Text = 'Transparency', Default = 0.5, Min = 0, Max = 1, Rounding = 1})
-HitboxBox:AddColorPicker('HitboxColor', {Default = Color3.new(1,0,0), Title = 'Hitbox Color'})
-HitboxBox:AddButton('Reset all hitboxes', function()
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character then
-            for _, part in pairs(v.Character:GetChildren()) do
-                if part:IsA("BasePart") then
-                    part.Size = part:FindFirstChild("OriginalSize") and part.OriginalSize.Value or part.Size
-                    part.Transparency = 0
-                end
-            end
-        end
-    end
-end)
-
--- ==========================================
--- =               TELEPORT                 =
--- ==========================================
-local TPBox = Tabs.Teleport:AddLeftGroupbox('Quick TP')
-TPBox:AddToggle('ClickTP', {Text = 'Click TP'}):AddKeyPicker('ClickTPKey', {Default = 'LeftControl', Text = 'Click TP Bind'})
-TPBox:AddButton('TP To last death position', function()
-    if LunarGlobals.DeathPos and LocalPlayer.Character then 
-        LocalPlayer.Character:PivotTo(CFrame.new(LunarGlobals.DeathPos)) 
-    end
-end)
-TPBox:AddToggle('RenderDeathPos', {Text = 'Render last death position'})
-
-local WaypointsBox = Tabs.Teleport:AddRightGroupbox('Waypoints')
-WaypointsBox:AddInput('WaypointName', {Default = '', Text = 'Name'})
-WaypointsBox:AddButton('Save Current Pos', function()
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local name = Options.WaypointName.Value ~= "" and Options.WaypointName.Value or "Point_" .. tostring(#LunarGlobals.Waypoints+1)
-        LunarGlobals.Waypoints[name] = LocalPlayer.Character.HumanoidRootPart.Position
-        local list = {}
-        for k,_ in pairs(LunarGlobals.Waypoints) do table.insert(list, k) end
-        Options.WaypointList:SetValues(list)
-    end
-end)
-WaypointsBox:AddDropdown('WaypointList', {Values = {}, Default = 1, Multi = false, Text = 'Saved Waypoints'})
-WaypointsBox:AddButton('Teleport To', function()
-    if LunarGlobals.Waypoints[Options.WaypointList.Value] and LocalPlayer.Character then
-        LocalPlayer.Character:PivotTo(CFrame.new(LunarGlobals.Waypoints[Options.WaypointList.Value]))
-    end
-end)
-WaypointsBox:AddButton('Delete Waypoint', function()
-    LunarGlobals.Waypoints[Options.WaypointList.Value] = nil
-    local list = {}
-    for k,_ in pairs(LunarGlobals.Waypoints) do table.insert(list, k) end
-    Options.WaypointList:SetValues(list)
-end)
-
--- ==========================================
--- =            WORLD & MISC                =
--- ==========================================
-local WorldMain = Tabs.WorldMisc:AddLeftGroupbox('World')
-WorldMain:AddToggle('WorldFullbright', {Text = 'Fullbright'})
-WorldMain:AddSlider('TimeChanger', {Text = 'Time changer', Default = 14, Min = 0, Max = 24, Rounding = 1})
-WorldMain:AddToggle('RemoveFog', {Text = 'Remove Fog'})
-WorldMain:AddToggle('RemoveShadows', {Text = 'Remove Shadows'})
-WorldMain:AddColorPicker('AmbientColor', {Default = Color3.new(1,1,1), Title = 'Ambient Color'})
-WorldMain:AddSlider('FOVChanger', {Text = 'FOV changer', Default = 70, Min = 30, Max = 120, Rounding = 0})
-
-local FreecamBox = Tabs.WorldMisc:AddRightGroupbox('Freecam')
-FreecamBox:AddToggle('Freecam', {Text = 'Enable Freecam'}):AddKeyPicker('FreecamKey', {Default = 'P', SyncToggleState = true, Mode = 'Toggle', Text = 'Freecam'})
-FreecamBox:AddSlider('FreecamSpeed', {Text = 'Freecam Speed', Default = 50, Min = 10, Max = 200, Rounding = 0})
-FreecamBox:AddButton('TP to freecam position', function()
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        LocalPlayer.Character:PivotTo(Camera.CFrame)
-    end
-end)
-
-local MiscBox = Tabs.WorldMisc:AddLeftGroupbox('Client')
-MiscBox:AddToggle('AntiAFK', {Text = 'Anti AFK (VirtualUser)'})
-MiscBox:AddToggle('InstantInteracts', {Text = 'Instant Interacts (Proximity)'})
-MiscBox:AddToggle('ThirdPerson', {Text = 'Force Third Person'})
-MiscBox:AddToggle('UnlockCamera', {Text = 'Unlock Camera Zoom'})
-
-local MiscServer = Tabs.WorldMisc:AddRightGroupbox('Server Tools')
-MiscServer:AddInput('SpoofName', {Default = '', Text = 'Local Name Spoofer'})
-MiscServer:AddDropdown('ServerHopType', {Values = {'Random', 'Big', 'Small'}, Default = 1, Multi = false, Text = 'Server Hop Type'})
-MiscServer:AddButton('Server Hop', function()
-    -- Generic Server Hop Logic
-    local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100")).data
-    local choice = servers[math.random(1, #servers)]
-    TeleportService:TeleportToPlaceInstance(game.PlaceId, choice.id, LocalPlayer)
-end)
-MiscServer:AddButton('Rejoin Server', function()
-    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
-end)
-MiscServer:AddButton('Copy Game/Place ID', function() if setclipboard then setclipboard(tostring(game.PlaceId)) end end)
-
--- ==========================================
--- =               SETTINGS                 =
--- ==========================================
-local SettingsBox = Tabs.Settings:AddLeftGroupbox('System')
-SettingsBox:AddToggle('AdonisBypass', {Text = 'Adonis Bypass (Automatic)'})
-SettingsBox:AddToggle('NPCDetection', {Text = 'NPC Detection'})
-SettingsBox:AddToggle('TargetsNPCOnly', {Text = 'Targets NPC Only'})
-SettingsBox:AddToggle('SilentLoad', {Text = 'Silent Load'})
-SettingsBox:AddToggle('GlobalChat', {Text = 'Global Script Chat'})
-
-local MenuBox = Tabs.Settings:AddRightGroupbox('Menu')
-MenuBox:AddLabel('Menu Key'):AddKeyPicker('MenuKeybind', {Default = 'RightShift', NoUI = true, Text = 'Menu keybind'})
-Library.ToggleKeybind = Options.MenuKeybind
-MenuBox:AddButton('Unload', function() Library:Unload() end)
-
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({'MenuKeybind'})
-ThemeManager:SetFolder('LunarUniversal')
-SaveManager:SetFolder('LunarUniversal/main')
-SaveManager:BuildConfigSection(Tabs.Settings)
-ThemeManager:BuildColorSection(Tabs.Settings)
-
-
 -- ==============================================================================
--- =                            CORE LOGIC                                      =
+-- =                          TAB: SELF                                         =
 -- ==============================================================================
+do
+    local LeftBox = Tabs.Self:AddLeftGroupbox('Movement')
 
--- // CORE HELPER FUNCTIONS // --
-local function IsAlive(player)
-    return player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0
+    LeftBox:AddToggle('SelfFly', {
+        Text = 'Fly',
+        Default = false,
+        Tooltip = 'Fly around the map using WASD + Space/Shift',
+    }):AddKeyPicker('SelfFlyKey', {
+        Default = 'F',
+        SyncToggleState = true,
+        Mode = 'Toggle',
+        Text = 'Fly Key',
+    })
+
+    LeftBox:AddSlider('SelfFlySpeed', {
+        Text = 'Fly Speed',
+        Default = 50,
+        Min = 10,
+        Max = 500,
+        Rounding = 0,
+        Suffix = ' studs/s',
+    })
+
+    LeftBox:AddToggle('SelfNoClip', {
+        Text = 'No Clip',
+        Default = false,
+        Tooltip = 'Walk through walls and obstacles',
+    }):AddKeyPicker('SelfNoClipKey', {
+        Default = 'N',
+        SyncToggleState = true,
+        Mode = 'Toggle',
+        Text = 'No Clip Key',
+    })
+
+    LeftBox:AddToggle('SelfInfJump', {
+        Text = 'Infinite Jump',
+        Default = false,
+        Tooltip = 'Jump infinitely in the air',
+    })
+
+    LeftBox:AddToggle('SelfJetPack', {
+        Text = 'Jet Pack',
+        Default = false,
+        Tooltip = 'Hold Space to propel upwards',
+    })
+
+    LeftBox:AddToggle('SelfSpeedhack', {
+        Text = 'Speedhack',
+        Default = false,
+    })
+
+    LeftBox:AddSlider('SelfSpeedhackVal', {
+        Text = 'Walk Speed',
+        Default = 16,
+        Min = 16,
+        Max = 500,
+        Rounding = 0,
+    })
+
+    LeftBox:AddToggle('SelfJumpBoost', {
+        Text = 'Jump Boost',
+        Default = false,
+    })
+
+    LeftBox:AddSlider('SelfJumpPower', {
+        Text = 'Jump Power',
+        Default = 50,
+        Min = 50,
+        Max = 500,
+        Rounding = 0,
+    })
+
+    LeftBox:AddToggle('SelfAirSwim', {
+        Text = 'Air Swim',
+        Default = false,
+        Tooltip = 'Swim in the air as if you were underwater',
+    })
+
+    -- Right box: Character
+    local RightBox = Tabs.Self:AddRightGroupbox('Character')
+
+    RightBox:AddToggle('SelfLongNeck', {
+        Text = 'Long Neck (Camera Height)',
+        Default = false,
+        Tooltip = 'Raises your camera above your head so you can peek over walls',
+    })
+
+    RightBox:AddSlider('SelfLongNeckHeight', {
+        Text = 'Height',
+        Default = 5,
+        Min = 1,
+        Max = 30,
+        Rounding = 1,
+    })
+
+    RightBox:AddToggle('SelfWalkFling', {
+        Text = 'Walk Fling',
+        Default = false,
+        Tooltip = 'Rapidly rotate your character to fling players on contact',
+    })
+
+    RightBox:AddToggle('SelfGoonAnim', {
+        Text = 'Goon Walk (Animation)',
+        Default = false,
+        Tooltip = 'Plays the Goon animation on your character',
+    })
 end
 
-local function IsVisible(part)
+-- ==============================================================================
+-- =                         TAB: PLAYERS                                       =
+-- ==============================================================================
+do
+    local LeftBox = Tabs.Players:AddLeftGroupbox('Player Selection')
+
+    LeftBox:AddDropdown('PlrSelected', {
+        Values = {'None'},
+        Default = 1,
+        Multi = false,
+        Text = 'Select Player',
+    })
+
+    LeftBox:AddButton({
+        Text = 'Refresh Player List',
+        Func = function()
+            local list = {'None'}
+            for _, v in ipairs(Players:GetPlayers()) do
+                if v ~= LocalPlayer then
+                    table.insert(list, v.Name)
+                end
+            end
+            Options.PlrSelected:SetValues(list)
+            Library:Notify("Player list refreshed!", 2)
+        end,
+        DoubleClick = false,
+    })
+
+    LeftBox:AddToggle('PlrIgnoreFriends', {
+        Text = 'Ignore Friends (Aimbot/ESP)',
+        Default = false,
+        Tooltip = 'Friends will be excluded from aimbot targeting and ESP rendering',
+    })
+
+    -- Right box: Actions
+    local RightBox = Tabs.Players:AddRightGroupbox('Actions')
+
+    RightBox:AddButton({
+        Text = 'Teleport To Player',
+        Func = function()
+            local target = Players:FindFirstChild(Options.PlrSelected.Value)
+            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    LocalPlayer.Character:PivotTo(target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -5))
+                    Library:Notify("Teleported to " .. target.Name, 2)
+                end
+            else
+                Library:Notify("Target player not found or dead.", 2)
+            end
+        end,
+        DoubleClick = false,
+    })
+
+    RightBox:AddToggle('PlrSpectate', {
+        Text = 'Spectate Player',
+        Default = false,
+    })
+
+    RightBox:AddToggle('PlrLookAt', {
+        Text = 'Look At Player',
+        Default = false,
+    })
+
+    RightBox:AddButton({
+        Text = 'Copy Username',
+        Func = function()
+            if setclipboard and Options.PlrSelected.Value ~= 'None' then
+                setclipboard(Options.PlrSelected.Value)
+                Library:Notify("Copied: " .. Options.PlrSelected.Value, 2)
+            end
+        end,
+        DoubleClick = false,
+    })
+
+    RightBox:AddButton({
+        Text = 'Copy User ID',
+        Func = function()
+            local target = Players:FindFirstChild(Options.PlrSelected.Value)
+            if target and setclipboard then
+                setclipboard(tostring(target.UserId))
+                Library:Notify("Copied ID: " .. tostring(target.UserId), 2)
+            end
+        end,
+        DoubleClick = false,
+    })
+end
+
+-- ==============================================================================
+-- =                         TAB: VISUALS                                       =
+-- ==============================================================================
+do
+    local LeftBox = Tabs.Visuals:AddLeftGroupbox('ESP Features')
+
+    LeftBox:AddToggle('ESPEnabled', {
+        Text = 'Enable ESP',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('ESPBox', {
+        Text = 'Box',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('ESPName', {
+        Text = 'Name',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('ESPHealthBar', {
+        Text = 'Health Bar',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('ESPHealthText', {
+        Text = 'Health Text',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('ESPWeapon', {
+        Text = 'Current Weapon / Tool',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('ESPTracers', {
+        Text = 'Tracers',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('ESPDistance', {
+        Text = 'Distance',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('ESPHeadDot', {
+        Text = 'Head Dot',
+        Default = false,
+    })
+
+    -- Right box: Chams & Options
+    local RightBox = Tabs.Visuals:AddRightGroupbox('Chams & Options')
+
+    RightBox:AddToggle('ESPChams', {
+        Text = 'Player Chams (Highlight)',
+        Default = false,
+    })
+
+    RightBox:AddLabel('Chams Color'):AddColorPicker('ESPChamsColor', {
+        Default = Color3.fromRGB(139, 92, 246),
+        Title = 'Chams Fill Color',
+    })
+
+    RightBox:AddLabel('Chams Outline'):AddColorPicker('ESPChamsOutline', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'Chams Outline Color',
+    })
+
+    RightBox:AddSlider('ESPChamsFillTrans', {
+        Text = 'Fill Transparency',
+        Default = 0.5,
+        Min = 0,
+        Max = 1,
+        Rounding = 1,
+    })
+
+    RightBox:AddToggle('ESPTeamCheck', {
+        Text = 'Team Check',
+        Default = false,
+    })
+
+    RightBox:AddSlider('ESPMaxDist', {
+        Text = 'Max Distance',
+        Default = 5000,
+        Min = 100,
+        Max = 10000,
+        Rounding = 0,
+        Suffix = ' studs',
+    })
+
+    RightBox:AddLabel('Target Color'):AddColorPicker('ESPTargetColor', {
+        Default = Color3.fromRGB(255, 50, 50),
+        Title = 'Target Color',
+    })
+
+    RightBox:AddLabel('Ally Color'):AddColorPicker('ESPAllyColor', {
+        Default = Color3.fromRGB(50, 255, 50),
+        Title = 'Ally Color',
+    })
+end
+
+-- ==============================================================================
+-- =                          TAB: AIMBOT                                       =
+-- ==============================================================================
+do
+    local LeftBox = Tabs.Aimbot:AddLeftGroupbox('Main')
+
+    LeftBox:AddToggle('AimEnabled', {
+        Text = 'Enable Aimbot',
+        Default = false,
+    })
+
+    LeftBox:AddDropdown('AimMethod', {
+        Values = {'Camera', 'Mouse'},
+        Default = 1,
+        Multi = false,
+        Text = 'Method',
+    })
+
+    LeftBox:AddLabel('Aim Key'):AddKeyPicker('AimKey', {
+        Default = 'MouseButton2',
+        Mode = 'Hold',
+        Text = 'Aim Key',
+    })
+
+    LeftBox:AddDropdown('AimPart', {
+        Values = {'Head', 'HumanoidRootPart', 'UpperTorso', 'LowerTorso'},
+        Default = 1,
+        Multi = false,
+        Text = 'Aim Part',
+    })
+
+    LeftBox:AddDropdown('AimPriority', {
+        Values = {'Closest to Cursor (FOV)', 'Closest Distance', 'Lowest Health'},
+        Default = 1,
+        Multi = false,
+        Text = 'Priority',
+    })
+
+    LeftBox:AddSlider('AimSmoothness', {
+        Text = 'Smoothness',
+        Default = 5,
+        Min = 1,
+        Max = 30,
+        Rounding = 1,
+        Suffix = '',
+    })
+
+    LeftBox:AddToggle('AimStickyAim', {
+        Text = 'Sticky Aim (Keep Target)',
+        Default = false,
+    })
+
+    -- Right box: Advanced Settings
+    local RightBox = Tabs.Aimbot:AddRightGroupbox('Advanced')
+
+    RightBox:AddToggle('AimPrediction', {
+        Text = 'Velocity Prediction',
+        Default = false,
+        Tooltip = 'Predict where the player will be based on their velocity',
+    })
+
+    RightBox:AddSlider('AimPredAmt', {
+        Text = 'Prediction Factor',
+        Default = 0.165,
+        Min = 0,
+        Max = 1,
+        Rounding = 3,
+    })
+
+    RightBox:AddToggle('AimShake', {
+        Text = 'Aim Shake (Humanize)',
+        Default = false,
+    })
+
+    RightBox:AddSlider('AimShakeAmt', {
+        Text = 'Shake Intensity',
+        Default = 3,
+        Min = 1,
+        Max = 20,
+        Rounding = 0,
+    })
+
+    RightBox:AddToggle('AimTeamCheck', {
+        Text = 'Team Check',
+        Default = false,
+    })
+
+    RightBox:AddToggle('AimWallCheck', {
+        Text = 'Wall Check (Raycast)',
+        Default = false,
+        Tooltip = 'Only aim at targets you can see through walls',
+    })
+
+    -- FOV Settings
+    local FOVBox = Tabs.Aimbot:AddLeftGroupbox('FOV Display')
+
+    FOVBox:AddToggle('AimShowFOV', {
+        Text = 'Show FOV Circle',
+        Default = false,
+    })
+
+    FOVBox:AddSlider('AimFOVSize', {
+        Text = 'FOV Size',
+        Default = 100,
+        Min = 10,
+        Max = 800,
+        Rounding = 0,
+        Suffix = ' px',
+    })
+
+    FOVBox:AddLabel('FOV Color'):AddColorPicker('AimFOVColor', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'FOV Color',
+    })
+
+    FOVBox:AddToggle('AimTargetLine', {
+        Text = 'Show Target Line',
+        Default = false,
+    })
+end
+
+-- ==============================================================================
+-- =                        TAB: TRIGGERBOT                                     =
+-- ==============================================================================
+do
+    local LeftBox = Tabs.TriggerBot:AddLeftGroupbox('Trigger Bot')
+
+    LeftBox:AddToggle('TrigEnabled', {
+        Text = 'Enable Trigger Bot',
+        Default = false,
+        Tooltip = 'Automatically fires when an enemy is under your crosshair',
+    })
+
+    LeftBox:AddLabel('Hold Key'):AddKeyPicker('TrigKey', {
+        Default = 'V',
+        Mode = 'Hold',
+        Text = 'Trigger Hold Key',
+    })
+
+    LeftBox:AddToggle('TrigTeamCheck', {
+        Text = 'Team Check',
+        Default = true,
+    })
+
+    LeftBox:AddSlider('TrigMinDelay', {
+        Text = 'Min Delay',
+        Default = 0.05,
+        Min = 0,
+        Max = 1,
+        Rounding = 2,
+        Suffix = 's',
+    })
+
+    LeftBox:AddSlider('TrigMaxDelay', {
+        Text = 'Max Delay',
+        Default = 0.15,
+        Min = 0,
+        Max = 1,
+        Rounding = 2,
+        Suffix = 's',
+    })
+
+    LeftBox:AddSlider('TrigMissChance', {
+        Text = 'Miss Chance',
+        Default = 0,
+        Min = 0,
+        Max = 100,
+        Rounding = 0,
+        Suffix = '%',
+    })
+end
+
+-- ==============================================================================
+-- =                          TAB: RADAR                                        =
+-- ==============================================================================
+do
+    local LeftBox = Tabs.Radar:AddLeftGroupbox('Radar Settings')
+
+    LeftBox:AddToggle('RadarEnabled', {
+        Text = 'Enable Minimap Radar',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('RadarShowNames', {
+        Text = 'Show Names on Radar',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('RadarTeamCheck', {
+        Text = 'Team Check',
+        Default = false,
+    })
+
+    LeftBox:AddSlider('RadarSize', {
+        Text = 'Radar Size',
+        Default = 200,
+        Min = 100,
+        Max = 500,
+        Rounding = 0,
+        Suffix = 'px',
+    })
+
+    LeftBox:AddSlider('RadarZoom', {
+        Text = 'Zoom Factor',
+        Default = 1,
+        Min = 0.1,
+        Max = 5,
+        Rounding = 1,
+    })
+
+    LeftBox:AddSlider('RadarTransparency', {
+        Text = 'Background Opacity',
+        Default = 0.7,
+        Min = 0,
+        Max = 1,
+        Rounding = 1,
+    })
+
+    LeftBox:AddLabel('Radar Background'):AddColorPicker('RadarBGColor', {
+        Default = Color3.fromRGB(15, 15, 25),
+        Title = 'Radar Background Color',
+    })
+end
+
+-- ==============================================================================
+-- =                            TAB: RAGE                                       =
+-- ==============================================================================
+do
+    local LeftBox = Tabs.Rage:AddLeftGroupbox('Anti-Hit Exploits')
+
+    LeftBox:AddToggle('RageSpinBot', {
+        Text = 'Spin Bot',
+        Default = false,
+        Tooltip = 'Rapidly rotate your character to make you harder to hit',
+    })
+
+    LeftBox:AddSlider('RageSpinSpeed', {
+        Text = 'Spin Speed',
+        Default = 30,
+        Min = 5,
+        Max = 100,
+        Rounding = 0,
+    })
+
+    -- Right box: Hitbox Expander
+    local RightBox = Tabs.Rage:AddRightGroupbox('Hitbox Expander')
+
+    RightBox:AddToggle('RageHitboxEnabled', {
+        Text = 'Enable Hitbox Expander',
+        Default = false,
+    })
+
+    RightBox:AddToggle('RageHitboxHeadOnly', {
+        Text = 'Head Only Mode',
+        Default = false,
+    })
+
+    RightBox:AddToggle('RageHitboxShow', {
+        Text = 'Show Hitboxes (Visible)',
+        Default = false,
+    })
+
+    RightBox:AddSlider('RageHitboxSize', {
+        Text = 'Hitbox Size',
+        Default = 5,
+        Min = 1,
+        Max = 50,
+        Rounding = 1,
+        Suffix = ' studs',
+    })
+
+    RightBox:AddLabel('Hitbox Color'):AddColorPicker('RageHitboxColor', {
+        Default = Color3.fromRGB(255, 0, 0),
+        Title = 'Hitbox Color',
+    })
+
+    RightBox:AddButton({
+        Text = 'Reset All Hitboxes',
+        Func = function()
+            for _, v in ipairs(Players:GetPlayers()) do
+                if v ~= LocalPlayer and v.Character then
+                    for _, part in ipairs(v.Character:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            part.Transparency = 0
+                            part.CanCollide = true
+                        end
+                    end
+                end
+            end
+            Library:Notify("All hitboxes reset.", 2)
+        end,
+        DoubleClick = true,
+    })
+end
+
+-- ==============================================================================
+-- =                         TAB: TELEPORT                                      =
+-- ==============================================================================
+do
+    local LeftBox = Tabs.Teleport:AddLeftGroupbox('Quick Teleport')
+
+    LeftBox:AddToggle('TPClickTP', {
+        Text = 'Click Teleport',
+        Default = false,
+        Tooltip = 'Hold the bind key and click to teleport to mouse position',
+    }):AddKeyPicker('TPClickTPKey', {
+        Default = 'LeftControl',
+        Mode = 'Hold',
+        Text = 'Click TP Bind',
+    })
+
+    LeftBox:AddButton({
+        Text = 'TP to Last Death Position',
+        Func = function()
+            if DeathPosition and LocalPlayer.Character then
+                LocalPlayer.Character:PivotTo(CFrame.new(DeathPosition))
+                Library:Notify("Teleported to death position.", 2)
+            else
+                Library:Notify("No death position recorded yet.", 2)
+            end
+        end,
+        DoubleClick = false,
+    })
+
+    LeftBox:AddToggle('TPRenderDeath', {
+        Text = 'Show Death Position Marker',
+        Default = false,
+    })
+
+    -- Right box: Waypoints
+    local RightBox = Tabs.Teleport:AddRightGroupbox('Waypoints System')
+
+    RightBox:AddInput('TPWaypointName', {
+        Default = '',
+        Numeric = false,
+        Finished = false,
+        Text = 'Waypoint Name',
+        Placeholder = 'Enter name...',
+    })
+
+    RightBox:AddButton({
+        Text = 'Save Current Position',
+        Func = function()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local name = Options.TPWaypointName.Value
+                if name == '' then name = "Waypoint_" .. tostring(#WaypointStore + 1) end
+                WaypointStore[name] = LocalPlayer.Character.HumanoidRootPart.Position
+                local list = {}
+                for k in pairs(WaypointStore) do table.insert(list, k) end
+                Options.TPWaypointSelect:SetValues(list)
+                Library:Notify("Saved waypoint: " .. name, 2)
+            end
+        end,
+        DoubleClick = false,
+    })
+
+    RightBox:AddDropdown('TPWaypointSelect', {
+        Values = {},
+        Default = 1,
+        Multi = false,
+        Text = 'Saved Waypoints',
+    })
+
+    RightBox:AddButton({
+        Text = 'Teleport to Waypoint',
+        Func = function()
+            local selected = Options.TPWaypointSelect.Value
+            if WaypointStore[selected] and LocalPlayer.Character then
+                LocalPlayer.Character:PivotTo(CFrame.new(WaypointStore[selected]))
+                Library:Notify("Teleported to: " .. selected, 2)
+            end
+        end,
+        DoubleClick = false,
+    })
+
+    RightBox:AddButton({
+        Text = 'Delete Selected Waypoint',
+        Func = function()
+            local selected = Options.TPWaypointSelect.Value
+            WaypointStore[selected] = nil
+            local list = {}
+            for k in pairs(WaypointStore) do table.insert(list, k) end
+            Options.TPWaypointSelect:SetValues(list)
+            Library:Notify("Deleted: " .. tostring(selected), 2)
+        end,
+        DoubleClick = true,
+    })
+end
+
+-- ==============================================================================
+-- =                          TAB: WORLD                                        =
+-- ==============================================================================
+do
+    local LeftBox = Tabs.World:AddLeftGroupbox('Lighting & Environment')
+
+    LeftBox:AddToggle('WorldFullbright', {
+        Text = 'Fullbright',
+        Default = false,
+    })
+
+    LeftBox:AddSlider('WorldTime', {
+        Text = 'Time of Day',
+        Default = 14,
+        Min = 0,
+        Max = 24,
+        Rounding = 1,
+    })
+
+    LeftBox:AddToggle('WorldRemoveFog', {
+        Text = 'Remove Fog',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('WorldRemoveShadows', {
+        Text = 'Remove Shadows',
+        Default = false,
+    })
+
+    LeftBox:AddLabel('Ambient Color'):AddColorPicker('WorldAmbient', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'Custom Ambient Color',
+    })
+
+    LeftBox:AddSlider('WorldGravity', {
+        Text = 'Gravity',
+        Default = 196,
+        Min = 0,
+        Max = 500,
+        Rounding = 0,
+    })
+
+    -- Right box: Freecam
+    local RightBox = Tabs.World:AddRightGroupbox('Freecam')
+
+    RightBox:AddToggle('WorldFreecam', {
+        Text = 'Freecam',
+        Default = false,
+        Tooltip = 'Detach camera and fly freely. WASD to move, Space/Shift for up/down.',
+    }):AddKeyPicker('WorldFreecamKey', {
+        Default = 'P',
+        SyncToggleState = true,
+        Mode = 'Toggle',
+        Text = 'Freecam Key',
+    })
+
+    RightBox:AddSlider('WorldFreecamSpeed', {
+        Text = 'Freecam Speed',
+        Default = 1,
+        Min = 0.1,
+        Max = 10,
+        Rounding = 1,
+    })
+
+    RightBox:AddButton({
+        Text = 'TP Character to Freecam Position',
+        Func = function()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                LocalPlayer.Character:PivotTo(Camera.CFrame)
+                Library:Notify("Teleported to freecam position.", 2)
+            end
+        end,
+        DoubleClick = false,
+    })
+
+    RightBox:AddSlider('WorldFOV', {
+        Text = 'Camera FOV',
+        Default = 70,
+        Min = 30,
+        Max = 120,
+        Rounding = 0,
+    })
+end
+
+-- ==============================================================================
+-- =                           TAB: MISC                                        =
+-- ==============================================================================
+do
+    local LeftBox = Tabs.Misc:AddLeftGroupbox('Client Utilities')
+
+    LeftBox:AddToggle('MiscAntiAFK', {
+        Text = 'Anti AFK',
+        Default = false,
+        Tooltip = 'Prevents Roblox from kicking you for being idle',
+    })
+
+    LeftBox:AddToggle('MiscInstantInteract', {
+        Text = 'Instant Interacts (ProximityPrompt)',
+        Default = false,
+        Tooltip = 'Removes hold time on all proximity prompts',
+    })
+
+    LeftBox:AddToggle('MiscUnlockCamera', {
+        Text = 'Unlock Camera Zoom',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('MiscThirdPerson', {
+        Text = 'Force Third Person',
+        Default = false,
+    })
+
+    LeftBox:AddToggle('MiscNoFallDmg', {
+        Text = 'No Fall Damage',
+        Default = false,
+        Tooltip = 'Prevents fall damage by resetting fall state',
+    })
+
+    -- Right box: Server Tools
+    local RightBox = Tabs.Misc:AddRightGroupbox('Server Tools')
+
+    RightBox:AddButton({
+        Text = 'Rejoin Server',
+        Func = function()
+            Library:Notify("Rejoining...", 2)
+            task.wait(0.5)
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+        end,
+        DoubleClick = true,
+    })
+
+    RightBox:AddButton({
+        Text = 'Server Hop (Random)',
+        Func = function()
+            Library:Notify("Finding a new server...", 2)
+            pcall(function()
+                local url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"
+                local data = HttpService:JSONDecode(game:HttpGet(url)).data
+                local validServers = {}
+                for _, s in ipairs(data) do
+                    if s.id ~= game.JobId and s.playing < s.maxPlayers then
+                        table.insert(validServers, s)
+                    end
+                end
+                if #validServers > 0 then
+                    local choice = validServers[math.random(1, #validServers)]
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, choice.id, LocalPlayer)
+                else
+                    Library:Notify("No available servers found.", 2)
+                end
+            end)
+        end,
+        DoubleClick = true,
+    })
+
+    RightBox:AddButton({
+        Text = 'Copy Place ID',
+        Func = function()
+            if setclipboard then
+                setclipboard(tostring(game.PlaceId))
+                Library:Notify("Copied Place ID: " .. tostring(game.PlaceId), 2)
+            end
+        end,
+        DoubleClick = false,
+    })
+
+    RightBox:AddButton({
+        Text = 'Copy Job ID',
+        Func = function()
+            if setclipboard then
+                setclipboard(tostring(game.JobId))
+                Library:Notify("Copied Job ID!", 2)
+            end
+        end,
+        DoubleClick = false,
+    })
+end
+
+-- ==============================================================================
+-- =                         TAB: SETTINGS                                      =
+-- ==============================================================================
+do
+    local LeftBox = Tabs.Settings:AddLeftGroupbox('Menu Settings')
+
+    LeftBox:AddLabel('Menu Keybind'):AddKeyPicker('SettingsMenuKey', {
+        Default = 'RightShift',
+        NoUI = true,
+        Text = 'Menu Toggle Key',
+    })
+    Library.ToggleKeybind = Options.SettingsMenuKey
+
+    LeftBox:AddButton({
+        Text = 'Unload Script',
+        Func = function() Library:Unload() end,
+        DoubleClick = true,
+    })
+
+    ThemeManager:SetLibrary(Library)
+    SaveManager:SetLibrary(Library)
+    SaveManager:IgnoreThemeSettings()
+    SaveManager:SetIgnoreIndexes({'SettingsMenuKey'})
+    ThemeManager:SetFolder('LunarUniversal')
+    SaveManager:SetFolder('LunarUniversal/main')
+    SaveManager:BuildConfigSection(Tabs.Settings)
+    ThemeManager:ApplyToTab(Tabs.Settings)
+end
+
+-- ==============================================================================
+-- =                                                                            =
+-- =                      CORE LOGIC ENGINE                                     =
+-- =                                                                            =
+-- ==============================================================================
+
+-- ==========================================
+-- =          HELPER FUNCTIONS              =
+-- ==========================================
+
+local function IsAlive(player)
+    if not player then return false end
+    local char = player.Character
+    if not char then return false end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    if hum.Health <= 0 then return false end
+    return true
+end
+
+local function IsFriend(player)
+    if not Toggles.PlrIgnoreFriends.Value then return false end
+    local success, result = pcall(function()
+        return LocalPlayer:IsFriendsWith(player.UserId)
+    end)
+    return success and result
+end
+
+local function IsTeammate(player)
+    if not player.Team or not LocalPlayer.Team then return false end
+    return player.Team == LocalPlayer.Team
+end
+
+local function IsVisibleRaycast(targetPart)
+    if not targetPart then return false end
     local origin = Camera.CFrame.Position
-    local dir = part.Position - origin
+    local direction = (targetPart.Position - origin)
     local params = RaycastParams.new()
     params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
     params.FilterType = Enum.RaycastFilterType.Exclude
-    local result = Workspace:Raycast(origin, dir, params)
-    return result == nil or result.Instance:IsDescendantOf(part.Parent)
-end
-
-local function GetClosestTarget()
-    local closest = nil
-    local maxDist = Toggles.ShowFOV.Value and Toggles.FOVRadius.Value or math.huge
-    local maxHealth = math.huge
-    local maxRealDist = math.huge
-
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and IsAlive(v) then
-            if Toggles.AimTeamCheck.Value and v.Team == LocalPlayer.Team then continue end
-            
-            local part = v.Character:FindFirstChild(Options.AimPart.Value) or v.Character.HumanoidRootPart
-            if Toggles.AimWallCheck.Value and not IsVisible(part) then continue end
-
-            local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
-            if onScreen then
-                local dist2D = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
-                local dist3D = (Camera.CFrame.Position - part.Position).Magnitude
-                
-                if Options.AimPriority.Value == 'FOV' and dist2D < maxDist then
-                    maxDist = dist2D
-                    closest = v
-                elseif Options.AimPriority.Value == 'Distance' and dist3D < maxRealDist then
-                    maxRealDist = dist3D
-                    closest = v
-                elseif Options.AimPriority.Value == 'Health' and v.Character.Humanoid.Health < maxHealth then
-                    maxHealth = v.Character.Humanoid.Health
-                    closest = v
-                end
-            end
-        end
-    end
-    return closest
+    local result = Workspace:Raycast(origin, direction, params)
+    if result == nil then return true end
+    if result.Instance:IsDescendantOf(targetPart.Parent) then return true end
+    return false
 end
 
 local function GetWeaponName(player)
     if not player.Character then return "None" end
     local tool = player.Character:FindFirstChildOfClass("Tool")
-    return tool and tool.Name or "None"
+    if tool then return tool.Name end
+    return "None"
 end
 
--- // ESP FACTORY // --
-local function createESP(player)
-    LunarGlobals.ESPObjects[player] = {
-        box = Drawing.new("Square"),
-        name = Drawing.new("Text"),
-        tracer = Drawing.new("Line"),
-        health = Drawing.new("Line"),
-        healthText = Drawing.new("Text"),
-        weapon = Drawing.new("Text"),
-        headDot = Drawing.new("Circle")
-    }
-    local esp = LunarGlobals.ESPObjects[player]
+local function GetAimTarget()
+    local bestTarget = nil
+    local bestScore = math.huge
+
+    -- Sticky Aim: keep locking on the same target if alive
+    if Toggles.AimStickyAim.Value and StickyTarget and IsAlive(StickyTarget) then
+        local part = StickyTarget.Character:FindFirstChild(Options.AimPart.Value)
+        if part then
+            local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if onScreen then return StickyTarget end
+        end
+    end
+
+    for _, v in ipairs(Players:GetPlayers()) do
+        if v == LocalPlayer then continue end
+        if not IsAlive(v) then continue end
+        if IsFriend(v) then continue end
+        if Toggles.AimTeamCheck.Value and IsTeammate(v) then continue end
+
+        local aimPartName = Options.AimPart.Value
+        local part = v.Character:FindFirstChild(aimPartName) or v.Character:FindFirstChild("HumanoidRootPart")
+        if not part then continue end
+
+        if Toggles.AimWallCheck.Value and not IsVisibleRaycast(part) then continue end
+
+        local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+        if not onScreen then continue end
+
+        local mousePos = UserInputService:GetMouseLocation()
+        local dist2D = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+        local dist3D = (Camera.CFrame.Position - part.Position).Magnitude
+
+        -- FOV Check
+        if Toggles.AimShowFOV.Value and dist2D > Options.AimFOVSize.Value then continue end
+
+        local score = dist2D
+        local priority = Options.AimPriority.Value
+        if priority == 'Closest Distance' then
+            score = dist3D
+        elseif priority == 'Lowest Health' then
+            score = v.Character.Humanoid.Health
+        end
+
+        if score < bestScore then
+            bestScore = score
+            bestTarget = v
+        end
+    end
+
+    StickyTarget = bestTarget
+    return bestTarget
+end
+
+-- ==========================================
+-- =          ESP OBJECT FACTORY            =
+-- ==========================================
+
+local function CreateESPForPlayer(player)
+    if ESPCache[player] then return end
+
+    local esp = {}
+    esp.box = NewDrawing("Square")
     esp.box.Thickness = 1
     esp.box.Filled = false
+
+    esp.name = NewDrawing("Text")
     esp.name.Size = 14
     esp.name.Center = true
     esp.name.Outline = true
-    esp.tracer.Thickness = 1
-    esp.health.Thickness = 2
+
+    esp.healthBar = NewDrawing("Line")
+    esp.healthBar.Thickness = 2
+
+    esp.healthBarBG = NewDrawing("Line")
+    esp.healthBarBG.Thickness = 4
+    esp.healthBarBG.Color = Color3.fromRGB(30, 30, 30)
+
+    esp.healthText = NewDrawing("Text")
     esp.healthText.Size = 12
-    esp.healthText.Center = true
+    esp.healthText.Center = false
     esp.healthText.Outline = true
+
+    esp.weapon = NewDrawing("Text")
     esp.weapon.Size = 12
     esp.weapon.Center = true
     esp.weapon.Outline = true
+
+    esp.tracer = NewDrawing("Line")
+    esp.tracer.Thickness = 1
+
+    esp.headDot = NewDrawing("Circle")
     esp.headDot.Filled = true
     esp.headDot.Thickness = 1
-    
-    -- Create Highlight Chams
-    local hl = Instance.new("Highlight")
-    hl.Name = player.Name
-    hl.Parent = LunarGlobals.ChamsFolder
-    hl.FillColor = Options.ChamsColor.Value
-    hl.OutlineColor = Options.ChamsOutlineColor.Value
-    hl.FillTransparency = Options.ChamsTransparency.Value
-    hl.OutlineTransparency = Options.ChamsOutlineTrans.Value
+
+    esp.distance = NewDrawing("Text")
+    esp.distance.Size = 12
+    esp.distance.Center = true
+    esp.distance.Outline = true
+
+    -- Highlight (Chams)
+    local hlOk, hl = pcall(function()
+        local h = Instance.new("Highlight")
+        h.Name = "Chams_" .. player.Name
+        h.Enabled = false
+        h.Parent = ChamsContainer
+        return h
+    end)
+    esp.highlight = hlOk and hl or nil
+
+    ESPCache[player] = esp
 end
 
-local function removeESP(player)
-    if LunarGlobals.ESPObjects[player] then
-        for _, d in pairs(LunarGlobals.ESPObjects[player]) do d:Remove() end
-        LunarGlobals.ESPObjects[player] = nil
-    end
-    local hl = LunarGlobals.ChamsFolder:FindFirstChild(player.Name)
-    if hl then hl:Destroy() end
+local function DestroyESPForPlayer(player)
+    local esp = ESPCache[player]
+    if not esp then return end
+
+    pcall(function() esp.box:Remove() end)
+    pcall(function() esp.name:Remove() end)
+    pcall(function() esp.healthBar:Remove() end)
+    pcall(function() esp.healthBarBG:Remove() end)
+    pcall(function() esp.healthText:Remove() end)
+    pcall(function() esp.weapon:Remove() end)
+    pcall(function() esp.tracer:Remove() end)
+    pcall(function() esp.headDot:Remove() end)
+    pcall(function() esp.distance:Remove() end)
+    if esp.highlight then pcall(function() esp.highlight:Destroy() end) end
+
+    ESPCache[player] = nil
 end
 
-for _, v in pairs(Players:GetPlayers()) do if v ~= LocalPlayer then createESP(v) end end
-Players.PlayerAdded:Connect(function(v) createESP(v) end)
-Players.PlayerRemoving:Connect(function(v) removeESP(v) end)
+local function HideAllESP(esp)
+    esp.box.Visible = false
+    esp.name.Visible = false
+    esp.healthBar.Visible = false
+    esp.healthBarBG.Visible = false
+    esp.healthText.Visible = false
+    esp.weapon.Visible = false
+    esp.tracer.Visible = false
+    esp.headDot.Visible = false
+    esp.distance.Visible = false
+    if esp.highlight then esp.highlight.Enabled = false end
+end
 
--- // INPUT EVENTS // --
-UserInputService.JumpRequest:Connect(function()
-    if Toggles.InfJump.Value and IsAlive(LocalPlayer) then
-        LocalPlayer.Character.Humanoid:ChangeState("Jumping")
+-- Initialize ESP for all current players
+for _, v in ipairs(Players:GetPlayers()) do
+    if v ~= LocalPlayer then CreateESPForPlayer(v) end
+end
+
+Players.PlayerAdded:Connect(function(v)
+    CreateESPForPlayer(v)
+end)
+
+Players.PlayerRemoving:Connect(function(v)
+    DestroyESPForPlayer(v)
+    if RadarCache[v] then
+        pcall(function() RadarCache[v]:Remove() end)
+        RadarCache[v] = nil
     end
 end)
 
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    
-    -- Click TP
-    if Toggles.ClickTP.Value and Options.ClickTPKey:GetState() and input.UserInputType == Enum.UserInputType.MouseButton1 then
-        if Mouse.Hit and IsAlive(LocalPlayer) then
-            LocalPlayer.Character:PivotTo(Mouse.Hit + Vector3.new(0, 3, 0))
+-- ==========================================
+-- =        DEATH POSITION TRACKING         =
+-- ==========================================
+LocalPlayer.CharacterRemoving:Connect(function(char)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then DeathPosition = hrp.Position end
+end)
+
+-- ==========================================
+-- =         INFINITE JUMP HANDLER          =
+-- ==========================================
+UserInputService.JumpRequest:Connect(function()
+    if Toggles.SelfInfJump.Value and IsAlive(LocalPlayer) then
+        LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- ==========================================
+-- =         CLICK TP INPUT HANDLER         =
+-- ==========================================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if Toggles.TPClickTP.Value and Options.TPClickTPKey:GetState() then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if Mouse.Hit and IsAlive(LocalPlayer) then
+                LocalPlayer.Character:PivotTo(Mouse.Hit + Vector3.new(0, 3, 0))
+            end
         end
     end
 end)
 
--- // ANTI AFK // --
+-- ==========================================
+-- =            ANTI AFK HANDLER            =
+-- ==========================================
 LocalPlayer.Idled:Connect(function()
-    if Toggles.AntiAFK.Value then
+    if Toggles.MiscAntiAFK.Value then
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
     end
 end)
 
--- // INSTANT INTERACTS // --
+-- ==========================================
+-- =       INSTANT INTERACT HANDLER         =
+-- ==========================================
 ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
-    if Toggles.InstantInteracts.Value then 
-        prompt.HoldDuration = 0 
+    if Toggles.MiscInstantInteract.Value then
+        prompt.HoldDuration = 0
     end
 end)
 
--- // MAIN RENDER LOOP (Visuals, Aimbot, Camera) // --
-RunService.RenderStepped:Connect(function()
-    LunarGlobals.TickCount = LunarGlobals.TickCount + 1
+-- ==========================================
+-- =       NO FALL DAMAGE HANDLER           =
+-- ==========================================
+LocalPlayer.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid", 10)
+    if hum then
+        hum.StateChanged:Connect(function(_, newState)
+            if Toggles.MiscNoFallDmg.Value and newState == Enum.HumanoidStateType.Freefall then
+                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+                hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            end
+        end)
+    end
+end)
+
+-- ==============================================================================
+-- =                   MAIN RENDER LOOP (Every Frame)                           =
+-- ==============================================================================
+RunService.RenderStepped:Connect(function(deltaTime)
+    TickCounter = TickCounter + 1
     local mousePos = UserInputService:GetMouseLocation()
     local screenSize = Camera.ViewportSize
+    local myAlive = IsAlive(LocalPlayer)
 
-    -- 1. Radar UI Update
-    Drawings.RadarBG.Visible = Toggles.RadarEnable.Value
-    Drawings.RadarBorder.Visible = Toggles.RadarEnable.Value
-    if Toggles.RadarEnable.Value then
-        Drawings.RadarBG.Size = Vector2.new(Options.RadarSize.Value, Options.RadarSize.Value)
-        Drawings.RadarBG.Position = Vector2.new(20, screenSize.Y / 2 - Options.RadarSize.Value / 2)
-        Drawings.RadarBG.Color = Options.RadarColor.Value
-        Drawings.RadarBG.Transparency = Options.RadarTransparency.Value
-        
-        Drawings.RadarBorder.Size = Drawings.RadarBG.Size
-        Drawings.RadarBorder.Position = Drawings.RadarBG.Position
-        Drawings.RadarBorder.Color = Color3.new(1,1,1)
+    -- ===== FOV CIRCLE =====
+    if Toggles.AimShowFOV.Value then
+        FOVCircle.Visible = true
+        FOVCircle.Radius = Options.AimFOVSize.Value
+        FOVCircle.Color = Options.AimFOVColor.Value
+        FOVCircle.Position = mousePos
+    else
+        FOVCircle.Visible = false
     end
 
-    -- 2. FOV UI Update
-    Drawings.FOVCircle.Visible = Toggles.ShowFOV.Value
-    if Toggles.ShowFOV.Value then
-        Drawings.FOVCircle.Radius = Toggles.FOVRadius.Value
-        Drawings.FOVCircle.Color = Options.FOVColor.Value
-        Drawings.FOVCircle.Position = mousePos
-    end
+    -- ===== AIMBOT =====
+    local currentTarget = nil
+    if Toggles.AimEnabled.Value and Options.AimKey:GetState() then
+        currentTarget = GetAimTarget()
+        if currentTarget and IsAlive(currentTarget) then
+            local aimPartName = Options.AimPart.Value
+            local part = currentTarget.Character:FindFirstChild(aimPartName) or currentTarget.Character:FindFirstChild("HumanoidRootPart")
 
-    -- 3. Target Aim Logic
-    local target = nil
-    if Options.AimKey:GetState() or (Toggles.AutoShoot.Value and Options.AutoShootKey:GetState()) then
-        target = GetClosestTarget()
-        if target and IsAlive(target) then
-            local part = target.Character:FindFirstChild(Options.AimPart.Value) or target.Character.HumanoidRootPart
-            local predPos = part.Position
-            
-            -- Complex Velocity Prediction Math
-            if Toggles.AimPrediction.Value then
-                local velocity = part.AssemblyLinearVelocity
-                local dist = (Camera.CFrame.Position - part.Position).Magnitude
-                predPos = predPos + (velocity * Options.PredictionAmount.Value * (dist/100))
-            end
+            if part then
+                local targetPos = part.Position
 
-            -- Aim Shake Generator (Bypass Recoil checks)
-            if Toggles.AimShake.Value then
-                local shakeAmount = Options.ShakeIntensity.Value / 10
-                predPos = predPos + Vector3.new(
-                    math.noise(LunarGlobals.TickCount * 0.1, 0, 0) * shakeAmount,
-                    math.noise(0, LunarGlobals.TickCount * 0.1, 0) * shakeAmount,
-                    math.noise(0, 0, LunarGlobals.TickCount * 0.1) * shakeAmount
-                )
-            end
-
-            -- Execute Camera Aimbot
-            if Options.AimMethod.Value == 'Camera' then
-                local cf = CFrame.new(Camera.CFrame.Position, predPos)
-                Camera.CFrame = Camera.CFrame:Lerp(cf, 1 / Options.AimSmoothness.Value)
-            end
-
-            -- Execute Mouse Aimbot (mousemoverel simulation)
-            if Options.AimMethod.Value == 'Mouse' then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(predPos)
-                if onScreen then
-                    local target2D = Vector2.new(screenPos.X, screenPos.Y)
-                    local delta = (target2D - mousePos) / Options.AimSmoothness.Value
-                    if mousemoverel then mousemoverel(delta.X, delta.Y) end
+                -- Velocity prediction
+                if Toggles.AimPrediction.Value then
+                    local vel = part.AssemblyLinearVelocity
+                    local dist3D = (Camera.CFrame.Position - part.Position).Magnitude
+                    targetPos = targetPos + (vel * Options.AimPredAmt.Value * (dist3D / 500))
                 end
-            end
 
-            -- Target Line Visual
-            if Toggles.TargetLine.Value then
-                local pos, onScreen = Camera:WorldToViewportPoint(predPos)
-                if onScreen then
-                    Drawings.TargetLine.From = mousePos
-                    Drawings.TargetLine.To = Vector2.new(pos.X, pos.Y)
-                    Drawings.TargetLine.Visible = true
-                else Drawings.TargetLine.Visible = false end
-            else Drawings.TargetLine.Visible = false end
-        else Drawings.TargetLine.Visible = false end
-    else Drawings.TargetLine.Visible = false end
-
-    -- 4. TriggerBot Logic
-    if Toggles.TriggerBot.Value and Options.TriggerKey:GetState() then
-        local ray = Ray.new(Camera.CFrame.Position, Camera.CFrame.LookVector * 1000)
-        local ignore = {LocalPlayer.Character}
-        local hit, pos = Workspace:FindPartOnRayWithIgnoreList(ray, ignore)
-        if hit and hit.Parent and hit.Parent:FindFirstChild("Humanoid") then
-            local p = Players:GetPlayerFromCharacter(hit.Parent)
-            if p and (not Toggles.TriggerTeamCheck.Value or p.Team ~= LocalPlayer.Team) then
-                if math.random(1, 100) > Options.TriggerMissChance.Value then
-                    if mouse1click then mouse1click() end
-                    task.wait(Options.TriggerMinDelay.Value + math.random() * (Options.TriggerMaxDelay.Value - Options.TriggerMinDelay.Value))
+                -- Aim shake (humanize movement)
+                if Toggles.AimShake.Value then
+                    local intensity = Options.AimShakeAmt.Value / 50
+                    targetPos = targetPos + Vector3.new(
+                        math.sin(TickCounter * 0.3) * intensity,
+                        math.cos(TickCounter * 0.4) * intensity * 0.5,
+                        math.sin(TickCounter * 0.5) * intensity
+                    )
                 end
-            end
-        end
-    end
 
-    -- 5. ESP & Radar Processing
-    for player, esp in pairs(LunarGlobals.ESPObjects) do
-        local isAlive = IsAlive(player)
-        local onScreen = false
-        local dist = 0
-        local pos = Vector3.new()
+                -- Camera method
+                if Options.AimMethod.Value == 'Camera' then
+                    local desiredCF = CFrame.new(Camera.CFrame.Position, targetPos)
+                    local smoothFactor = 1 / Options.AimSmoothness.Value
+                    Camera.CFrame = Camera.CFrame:Lerp(desiredCF, smoothFactor)
+                end
 
-        if isAlive then
-            local hrp = player.Character.HumanoidRootPart
-            pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-            dist = (Camera.CFrame.Position - hrp.Position).Magnitude
-            
-            if Toggles.ESPTeamCheck.Value and player.Team == LocalPlayer.Team then onScreen = false end
-            if dist > Toggles.ESPMaxDistance.Value then onScreen = false end
+                -- Mouse method
+                if Options.AimMethod.Value == 'Mouse' then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
+                    if onScreen and mousemoverel then
+                        local target2D = Vector2.new(screenPos.X, screenPos.Y)
+                        local delta = (target2D - mousePos) / Options.AimSmoothness.Value
+                        mousemoverel(delta.X, delta.Y)
+                    end
+                end
 
-            -- Highlight Chams Logic
-            local hl = LunarGlobals.ChamsFolder:FindFirstChild(player.Name)
-            if hl then
-                if Toggles.ESPChams.Value and onScreen then
-                    hl.Adornee = player.Character
-                    hl.FillColor = Options.ChamsColor.Value
-                    hl.OutlineColor = Options.ChamsOutlineColor.Value
-                    hl.FillTransparency = Options.ChamsTransparency.Value
-                    hl.OutlineTransparency = Options.ChamsOutlineTrans.Value
-                    hl.DepthMode = Toggles.ESPChamsWallCheck.Value and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop
-                    hl.Enabled = true
+                -- Target line
+                if Toggles.AimTargetLine.Value then
+                    local linePos, lineOnScreen = Camera:WorldToViewportPoint(targetPos)
+                    if lineOnScreen then
+                        TargetLine.From = mousePos
+                        TargetLine.To = Vector2.new(linePos.X, linePos.Y)
+                        TargetLine.Color = Color3.fromRGB(255, 50, 50)
+                        TargetLine.Visible = true
+                    else
+                        TargetLine.Visible = false
+                    end
                 else
-                    hl.Enabled = false
-                end
-            end
-            
-            -- Hitbox Expander (Rage)
-            if Toggles.ExpandHitboxes.Value then
-                local hitPart = Toggles.HeadOnlyMode.Value and player.Character:FindFirstChild("Head") or hrp
-                if hitPart then
-                    hitPart.Size = Vector3.new(Options.HitboxSize.Value, Options.HitboxSize.Value, Options.HitboxSize.Value)
-                    hitPart.Transparency = Options.HitboxTransparency.Value
-                    hitPart.BrickColor = BrickColor.new(Options.HitboxColor.Value)
-                    hitPart.Material = Enum.Material.Neon
-                    hitPart.CanCollide = false
+                    TargetLine.Visible = false
                 end
             end
         else
-            -- Disable chams if dead
-            local hl = LunarGlobals.ChamsFolder:FindFirstChild(player.Name)
-            if hl then hl.Enabled = false end
+            TargetLine.Visible = false
+        end
+    else
+        TargetLine.Visible = false
+    end
+
+    -- ===== TRIGGERBOT =====
+    if Toggles.TrigEnabled.Value and Options.TrigKey:GetState() and not TriggerCooldown then
+        local origin = Camera.CFrame.Position
+        local direction = Camera.CFrame.LookVector * 1000
+        local params = RaycastParams.new()
+        params.FilterDescendantsInstances = {LocalPlayer.Character}
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        local result = Workspace:Raycast(origin, direction, params)
+        if result and result.Instance then
+            local hitChar = result.Instance:FindFirstAncestorOfClass("Model")
+            if hitChar then
+                local hitPlayer = Players:GetPlayerFromCharacter(hitChar)
+                if hitPlayer and hitPlayer ~= LocalPlayer then
+                    local shouldShoot = true
+                    if Toggles.TrigTeamCheck.Value and IsTeammate(hitPlayer) then shouldShoot = false end
+                    if math.random(1, 100) <= Options.TrigMissChance.Value then shouldShoot = false end
+
+                    if shouldShoot then
+                        TriggerCooldown = true
+                        local delay = Options.TrigMinDelay.Value + math.random() * (Options.TrigMaxDelay.Value - Options.TrigMinDelay.Value)
+                        task.delay(delay, function()
+                            if mouse1click then mouse1click() end
+                            TriggerCooldown = false
+                        end)
+                    end
+                end
+            end
+        end
+    end
+
+    -- ===== ESP RENDERING =====
+    for player, esp in pairs(ESPCache) do
+        if not Toggles.ESPEnabled.Value or not IsAlive(player) then
+            HideAllESP(esp)
+            continue
         end
 
-        local color = (player.Team == LocalPlayer.Team) and Options.ESPColorAlly.Value or Options.ESPColorTarget.Value
+        local char = player.Character
+        local hrp = char.HumanoidRootPart
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local head = char:FindFirstChild("Head")
 
-        if isAlive and onScreen then
-            -- Bounding Box Calcs
-            local rootPos, _ = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
-            local headPos, _ = Camera:WorldToViewportPoint(player.Character.Head.Position + Vector3.new(0, 0.5, 0))
-            local legPos, _ = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position - Vector3.new(0, 3, 0))
-            
-            local h = math.abs(headPos.Y - legPos.Y)
-            local w = h / 2
-            local tPos = Vector2.new(rootPos.X - w/2, headPos.Y)
+        local pos3D, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+        local dist3D = (Camera.CFrame.Position - hrp.Position).Magnitude
 
-            if Toggles.ESPBox.Value then
-                esp.box.Size = Vector2.new(w, h)
-                esp.box.Position = tPos
-                esp.box.Color = color
-                esp.box.Visible = true
-            else esp.box.Visible = false end
-            
-            if Toggles.ESPName.Value then
-                esp.name.Position = Vector2.new(tPos.X + w/2, tPos.Y - 15)
-                esp.name.Text = player.Name
-                esp.name.Color = color
-                esp.name.Visible = true
-            else esp.name.Visible = false end
-            
-            if Toggles.ESPDistance.Value then
-                esp.name.Text = esp.name.Text .. " [" .. math.floor(dist) .. "m]"
-            end
+        -- Team check
+        if Toggles.ESPTeamCheck.Value and IsTeammate(player) then
+            HideAllESP(esp)
+            continue
+        end
 
-            if Toggles.ESPHealthBar.Value then
-                local health = player.Character.Humanoid.Health
-                local maxHealth = player.Character.Humanoid.MaxHealth
-                local hSize = (health / maxHealth) * h
-                esp.health.From = Vector2.new(tPos.X - 5, tPos.Y + h)
-                esp.health.To = Vector2.new(tPos.X - 5, tPos.Y + h - hSize)
-                esp.health.Color = Color3.fromHSV(health/maxHealth * 0.3, 1, 1)
-                esp.health.Visible = true
-            else esp.health.Visible = false end
-            
-            if Toggles.ESPHealthText.Value then
-                local health = math.floor(player.Character.Humanoid.Health)
-                esp.healthText.Position = Vector2.new(tPos.X - 25, tPos.Y + h/2)
-                esp.healthText.Text = tostring(health) .. "HP"
-                esp.healthText.Color = Color3.new(0, 1, 0)
-                esp.healthText.Visible = true
-            else esp.healthText.Visible = false end
-            
-            if Toggles.ESPWeapon.Value then
-                esp.weapon.Position = Vector2.new(tPos.X + w/2, tPos.Y + h + 2)
-                esp.weapon.Text = GetWeaponName(player)
-                esp.weapon.Color = Color3.new(1, 1, 1)
-                esp.weapon.Visible = true
-            else esp.weapon.Visible = false end
-            
-            if Toggles.ESPHeadDot.Value then
-                esp.headDot.Position = Vector2.new(headPos.X, headPos.Y)
-                esp.headDot.Radius = math.clamp(50 / dist, 1, 5)
-                esp.headDot.Color = color
-                esp.headDot.Visible = true
-            else esp.headDot.Visible = false end
+        -- Friend check
+        if IsFriend(player) then
+            HideAllESP(esp)
+            continue
+        end
 
-            if Toggles.ESPTracers.Value then
-                esp.tracer.From = Vector2.new(screenSize.X / 2, screenSize.Y)
-                esp.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
-                esp.tracer.Color = color
-                esp.tracer.Visible = true
-            else esp.tracer.Visible = false end
+        -- Distance check
+        if dist3D > Options.ESPMaxDist.Value then
+            HideAllESP(esp)
+            continue
+        end
+
+        if not onScreen then
+            HideAllESP(esp)
+            continue
+        end
+
+        -- Compute bounding box from head and feet
+        local color = IsTeammate(player) and Options.ESPAllyColor.Value or Options.ESPTargetColor.Value
+        local headPos3D = head and Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or pos3D
+        local feetPos3D = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+
+        local boxH = math.abs(headPos3D.Y - feetPos3D.Y)
+        local boxW = boxH / 2
+        local boxTopLeft = Vector2.new(pos3D.X - boxW / 2, headPos3D.Y)
+
+        -- BOX
+        if Toggles.ESPBox.Value then
+            esp.box.Size = Vector2.new(boxW, boxH)
+            esp.box.Position = boxTopLeft
+            esp.box.Color = color
+            esp.box.Visible = true
+        else esp.box.Visible = false end
+
+        -- NAME
+        if Toggles.ESPName.Value then
+            esp.name.Position = Vector2.new(pos3D.X, boxTopLeft.Y - 16)
+            esp.name.Text = player.Name
+            esp.name.Color = color
+            esp.name.Visible = true
+        else esp.name.Visible = false end
+
+        -- DISTANCE
+        if Toggles.ESPDistance.Value then
+            esp.distance.Position = Vector2.new(pos3D.X, boxTopLeft.Y + boxH + 2)
+            esp.distance.Text = "[" .. math.floor(dist3D) .. "m]"
+            esp.distance.Color = Color3.fromRGB(200, 200, 200)
+            esp.distance.Visible = true
+        else esp.distance.Visible = false end
+
+        -- HEALTH BAR (Vertical bar on the left side of the box)
+        if Toggles.ESPHealthBar.Value then
+            local health = hum.Health
+            local maxHealth = hum.MaxHealth
+            local ratio = math.clamp(health / maxHealth, 0, 1)
+            local barX = boxTopLeft.X - 6
+
+            esp.healthBarBG.From = Vector2.new(barX, boxTopLeft.Y)
+            esp.healthBarBG.To = Vector2.new(barX, boxTopLeft.Y + boxH)
+            esp.healthBarBG.Visible = true
+
+            esp.healthBar.From = Vector2.new(barX, boxTopLeft.Y + boxH * (1 - ratio))
+            esp.healthBar.To = Vector2.new(barX, boxTopLeft.Y + boxH)
+            esp.healthBar.Color = Color3.fromHSV(ratio * 0.33, 1, 1)
+            esp.healthBar.Visible = true
         else
-            esp.box.Visible = false; esp.name.Visible = false; esp.tracer.Visible = false; 
-            esp.health.Visible = false; esp.healthText.Visible = false; esp.weapon.Visible = false;
-            esp.headDot.Visible = false
+            esp.healthBar.Visible = false
+            esp.healthBarBG.Visible = false
         end
 
-        -- Radar Drawing Math
-        if isAlive and Toggles.RadarEnable.Value and (not Toggles.RadarTeamCheck.Value or player.Team ~= LocalPlayer.Team) then
-            if not LunarGlobals.RadarDots[player] then
-                LunarGlobals.RadarDots[player] = Drawing.new("Square")
-                LunarGlobals.RadarDots[player].Size = Vector2.new(4,4)
-                LunarGlobals.RadarDots[player].Filled = true
+        -- HEALTH TEXT
+        if Toggles.ESPHealthText.Value then
+            esp.healthText.Position = Vector2.new(boxTopLeft.X - 30, boxTopLeft.Y + boxH / 2 - 6)
+            esp.healthText.Text = tostring(math.floor(hum.Health))
+            esp.healthText.Color = Color3.fromHSV(math.clamp(hum.Health / hum.MaxHealth, 0, 1) * 0.33, 1, 1)
+            esp.healthText.Visible = true
+        else esp.healthText.Visible = false end
+
+        -- WEAPON
+        if Toggles.ESPWeapon.Value then
+            esp.weapon.Position = Vector2.new(pos3D.X, boxTopLeft.Y + boxH + (Toggles.ESPDistance.Value and 16 or 2))
+            esp.weapon.Text = GetWeaponName(player)
+            esp.weapon.Color = Color3.fromRGB(255, 200, 100)
+            esp.weapon.Visible = true
+        else esp.weapon.Visible = false end
+
+        -- TRACERS
+        if Toggles.ESPTracers.Value then
+            esp.tracer.From = Vector2.new(screenSize.X / 2, screenSize.Y)
+            esp.tracer.To = Vector2.new(pos3D.X, boxTopLeft.Y + boxH)
+            esp.tracer.Color = color
+            esp.tracer.Visible = true
+        else esp.tracer.Visible = false end
+
+        -- HEAD DOT
+        if Toggles.ESPHeadDot.Value and head then
+            local headScreenPos = Camera:WorldToViewportPoint(head.Position)
+            esp.headDot.Position = Vector2.new(headScreenPos.X, headScreenPos.Y)
+            esp.headDot.Radius = math.clamp(80 / dist3D, 1, 6)
+            esp.headDot.Color = color
+            esp.headDot.Visible = true
+        else esp.headDot.Visible = false end
+
+        -- CHAMS (Highlight)
+        if esp.highlight then
+            if Toggles.ESPChams.Value then
+                esp.highlight.Adornee = char
+                esp.highlight.FillColor = Options.ESPChamsColor.Value
+                esp.highlight.OutlineColor = Options.ESPChamsOutline.Value
+                esp.highlight.FillTransparency = Options.ESPChamsFillTrans.Value
+                esp.highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                esp.highlight.Enabled = true
+            else
+                esp.highlight.Enabled = false
             end
-            local myPos = IsAlive(LocalPlayer) and LocalPlayer.Character.HumanoidRootPart.Position or Vector3.new()
+        end
+    end
+
+    -- ===== RADAR =====
+    if Toggles.RadarEnabled.Value and myAlive then
+        local radarSize = Options.RadarSize.Value
+        local radarPos = Vector2.new(20, screenSize.Y / 2 - radarSize / 2)
+
+        RadarBackground.Size = Vector2.new(radarSize, radarSize)
+        RadarBackground.Position = radarPos
+        RadarBackground.Color = Options.RadarBGColor.Value
+        RadarBackground.Transparency = Options.RadarTransparency.Value
+        RadarBackground.Visible = true
+
+        RadarBorder.Size = Vector2.new(radarSize, radarSize)
+        RadarBorder.Position = radarPos
+        RadarBorder.Visible = true
+
+        RadarCenter.Position = radarPos + Vector2.new(radarSize / 2, radarSize / 2)
+        RadarCenter.Visible = true
+
+        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+        local camLook = Camera.CFrame.LookVector
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player == LocalPlayer then continue end
+            if not IsAlive(player) then
+                if RadarCache[player] then RadarCache[player].Visible = false end
+                continue
+            end
+            if Toggles.RadarTeamCheck.Value and IsTeammate(player) then
+                if RadarCache[player] then RadarCache[player].Visible = false end
+                continue
+            end
+
+            if not RadarCache[player] then
+                RadarCache[player] = NewDrawing("Circle")
+                RadarCache[player].Filled = true
+                RadarCache[player].Radius = 3
+            end
+
             local theirPos = player.Character.HumanoidRootPart.Position
             local rel = (theirPos - myPos)
-            local camDir = Camera.CFrame.LookVector
-            local relY = (camDir.X * rel.X + camDir.Z * rel.Z)
-            local relX = (camDir.Z * rel.X - camDir.X * rel.Z)
-            
             local zoom = Options.RadarZoom.Value
-            local maxR = Options.RadarSize.Value / 2
-            local plotX = math.clamp(relX * zoom, -maxR + 2, maxR - 2)
-            local plotY = math.clamp(-relY * zoom, -maxR + 2, maxR - 2)
-            
-            LunarGlobals.RadarDots[player].Position = Drawings.RadarBG.Position + Vector2.new(maxR + plotX - 2, maxR + plotY - 2)
-            LunarGlobals.RadarDots[player].Color = color
-            LunarGlobals.RadarDots[player].Visible = true
-        else
-            if LunarGlobals.RadarDots[player] then LunarGlobals.RadarDots[player].Visible = false end
+            local maxR = radarSize / 2
+
+            -- Rotate relative position by camera direction
+            local forward = Vector2.new(camLook.X, camLook.Z).Unit
+            local right = Vector2.new(-forward.Y, forward.X)
+            local relFlat = Vector2.new(rel.X, rel.Z)
+            local dotForward = relFlat:Dot(forward)
+            local dotRight = relFlat:Dot(right)
+
+            local plotX = math.clamp(dotRight * zoom, -maxR + 4, maxR - 4)
+            local plotY = math.clamp(-dotForward * zoom, -maxR + 4, maxR - 4)
+
+            local dotPos = radarPos + Vector2.new(maxR + plotX, maxR + plotY)
+            local dotColor = IsTeammate(player) and Options.ESPAllyColor.Value or Options.ESPTargetColor.Value
+
+            RadarCache[player].Position = dotPos
+            RadarCache[player].Color = dotColor
+            RadarCache[player].Visible = true
         end
+    else
+        RadarBackground.Visible = false
+        RadarBorder.Visible = false
+        RadarCenter.Visible = false
+        for _, dot in pairs(RadarCache) do dot.Visible = false end
     end
 
-    -- 6. Freecam / Camera Modes
-    if Toggles.Freecam.Value then
-        if not LunarGlobals.FreecamEnabled then
-            LunarGlobals.FreecamEnabled = true
-            LunarGlobals.FreecamCFrame = Camera.CFrame
+    -- ===== DEATH POSITION MARKER =====
+    if Toggles.TPRenderDeath.Value and DeathPosition then
+        local deathScreen, deathOnScreen = Camera:WorldToViewportPoint(DeathPosition)
+        if deathOnScreen then
+            DeathMarker.Position = Vector2.new(deathScreen.X, deathScreen.Y)
+            DeathMarker.Visible = true
+        else DeathMarker.Visible = false end
+    else DeathMarker.Visible = false end
+
+    -- ===== FREECAM =====
+    if Toggles.WorldFreecam.Value then
+        if not FreecamActive then
+            FreecamActive = true
+            FreecamStoredCFrame = Camera.CFrame
         end
         Camera.CameraType = Enum.CameraType.Scriptable
-        
-        local camDir = Camera.CFrame.LookVector
-        local rightDir = Camera.CFrame.RightVector
-        local speed = Options.FreecamSpeed.Value / 10
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then LunarGlobals.FreecamCFrame = LunarGlobals.FreecamCFrame + (camDir * speed) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then LunarGlobals.FreecamCFrame = LunarGlobals.FreecamCFrame - (camDir * speed) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then LunarGlobals.FreecamCFrame = LunarGlobals.FreecamCFrame + (rightDir * speed) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then LunarGlobals.FreecamCFrame = LunarGlobals.FreecamCFrame - (rightDir * speed) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then LunarGlobals.FreecamCFrame = LunarGlobals.FreecamCFrame + Vector3.new(0, speed, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then LunarGlobals.FreecamCFrame = LunarGlobals.FreecamCFrame - Vector3.new(0, speed, 0) end
-        
-        -- Mouse look
-        local delta = UserInputService:GetMouseDelta()
-        LunarGlobals.FreecamCFrame = LunarGlobals.FreecamCFrame * CFrame.Angles(math.rad(-delta.Y), 0, 0)
-        LunarGlobals.FreecamCFrame = CFrame.new(LunarGlobals.FreecamCFrame.Position) * CFrame.Angles(0, math.rad(-delta.X), 0) * LunarGlobals.FreecamCFrame.Rotation
-        
-        Camera.CFrame = LunarGlobals.FreecamCFrame
+
+        local speed = Options.WorldFreecamSpeed.Value
+        local dir = Vector3.new()
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + Camera.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - Camera.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + Camera.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - Camera.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0, 1, 0) end
+        Camera.CFrame = Camera.CFrame + dir * speed
     else
-        if LunarGlobals.FreecamEnabled then
-            LunarGlobals.FreecamEnabled = false
+        if FreecamActive then
+            FreecamActive = false
             Camera.CameraType = Enum.CameraType.Custom
         end
     end
-    
-    -- Third Person & FOV
-    if IsAlive(LocalPlayer) then
-        if Toggles.UnlockCamera.Value then
-            LocalPlayer.CameraMaxZoomDistance = 100000
+
+    -- ===== SPECTATE =====
+    if Toggles.PlrSpectate.Value then
+        local target = Players:FindFirstChild(Options.PlrSelected.Value)
+        if target and IsAlive(target) then
+            Camera.CameraSubject = target.Character:FindFirstChildOfClass("Humanoid")
         end
-        if Toggles.ThirdPerson.Value then 
-            LocalPlayer.CameraMaxZoomDistance = 15; LocalPlayer.CameraMinZoomDistance = 15 
-        elseif not Toggles.UnlockCamera.Value then 
-            LocalPlayer.CameraMinZoomDistance = 0.5; LocalPlayer.CameraMaxZoomDistance = 400 
-        end
-        
-        if Toggles.LongNeck.Value then
-            LocalPlayer.Character.Humanoid.CameraOffset = Vector3.new(0, Options.LongNeckHeight.Value, 0)
+    elseif myAlive then
+        Camera.CameraSubject = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    end
+
+    -- ===== CAMERA / WORLD SETTINGS =====
+    if myAlive then
+        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        -- Long Neck
+        if Toggles.SelfLongNeck.Value then
+            hum.CameraOffset = Vector3.new(0, Options.SelfLongNeckHeight.Value, 0)
         else
-            LocalPlayer.Character.Humanoid.CameraOffset = Vector3.new(0,0,0)
+            hum.CameraOffset = Vector3.new(0, 0, 0)
+        end
+
+        -- Third person
+        if Toggles.MiscThirdPerson.Value then
+            LocalPlayer.CameraMaxZoomDistance = 15
+            LocalPlayer.CameraMinZoomDistance = 15
+        elseif Toggles.MiscUnlockCamera.Value then
+            LocalPlayer.CameraMaxZoomDistance = 100000
+        else
+            LocalPlayer.CameraMinZoomDistance = 0.5
+            LocalPlayer.CameraMaxZoomDistance = 400
         end
     end
-    
-    -- Lighting Modifiers
+
+    -- Lighting
     if Toggles.WorldFullbright.Value then
-        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-        Lighting.ColorShift_Bottom = Color3.fromRGB(255, 255, 255)
-        Lighting.ColorShift_Top = Color3.fromRGB(255, 255, 255)
-    else
-        Lighting.Ambient = Options.AmbientColor.Value
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.ColorShift_Bottom = Color3.new(1, 1, 1)
+        Lighting.ColorShift_Top = Color3.new(1, 1, 1)
     end
-    Lighting.ClockTime = Options.TimeChanger.Value
-    Camera.FieldOfView = Options.FOVChanger.Value
-    Lighting.FogEnd = Toggles.RemoveFog.Value and 100000 or 1000
+
+    Lighting.ClockTime = Options.WorldTime.Value
+    Camera.FieldOfView = Options.WorldFOV.Value
+    Workspace.Gravity = Options.WorldGravity.Value
+    Lighting.FogEnd = Toggles.WorldRemoveFog.Value and 1e8 or OriginalFog
+
+    if Toggles.WorldRemoveShadows.Value then
+        Lighting.GlobalShadows = false
+    end
 end)
 
--- // PHYSICS LOOP (Stepped) // --
+-- ==============================================================================
+-- =                   PHYSICS LOOP (Stepped, 60hz)                             =
+-- ==============================================================================
 RunService.Stepped:Connect(function()
     if not IsAlive(LocalPlayer) then return end
-    
-    local char = LocalPlayer.Character
-    local hum = char:FindFirstChild("Humanoid")
-    local hrp = char:FindFirstChild("HumanoidRootPart")
 
-    -- Speedhack & JumpBoost
-    if Toggles.Speedhack.Value then hum.WalkSpeed = Options.SpeedhackSpeed.Value end
-    if Toggles.JumpBoost.Value then hum.JumpPower = Options.JumpBoostHeight.Value end
-    
-    -- Noclip
-    if Toggles.NoClip.Value then
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
+    local char = LocalPlayer.Character
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return end
+
+    -- ===== SPEEDHACK =====
+    if Toggles.SelfSpeedhack.Value then
+        hum.WalkSpeed = Options.SelfSpeedhackVal.Value
+    end
+
+    -- ===== JUMP BOOST =====
+    if Toggles.SelfJumpBoost.Value then
+        hum.JumpPower = Options.SelfJumpPower.Value
+        hum.UseJumpPower = true
+    end
+
+    -- ===== NOCLIP =====
+    if Toggles.SelfNoClip.Value then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
     end
 
-    -- Fly Mode (Velocity & BodyMover calculation)
-    if Toggles.Fly.Value and hrp then
-        local camDir = Camera.CFrame.LookVector
-        local rightDir = Camera.CFrame.RightVector
-        local vel = Vector3.new(0,0,0)
-        
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then vel = vel + camDir end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then vel = vel - camDir end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then vel = vel + rightDir end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then vel = vel - rightDir end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vel = vel + Vector3.new(0,1,0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then vel = vel - Vector3.new(0,1,0) end
-        
-        hrp.Velocity = vel * Options.FlySpeed.Value
+    -- ===== FLY =====
+    if Toggles.SelfFly.Value then
+        local camLook = Camera.CFrame.LookVector
+        local camRight = Camera.CFrame.RightVector
+        local velocity = Vector3.new(0, 0, 0)
+
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then velocity = velocity + camLook end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then velocity = velocity - camLook end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then velocity = velocity + camRight end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then velocity = velocity - camRight end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then velocity = velocity + Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then velocity = velocity - Vector3.new(0, 1, 0) end
+
+        hrp.Velocity = velocity * Options.SelfFlySpeed.Value
         hum.PlatformStand = true
-    elseif not Toggles.Fly.Value and hum.PlatformStand then
-        hum.PlatformStand = false
+    else
+        if hum.PlatformStand then
+            hum.PlatformStand = false
+        end
     end
 
-    -- Jetpack (Force upwards on Space)
-    if Toggles.JetPack.Value and UserInputService:IsKeyDown(Enum.KeyCode.Space) and hrp then
-        hrp.Velocity = Vector3.new(hrp.Velocity.X, 50, hrp.Velocity.Z)
+    -- ===== JETPACK =====
+    if Toggles.SelfJetPack.Value and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+        hrp.Velocity = Vector3.new(hrp.Velocity.X, 60, hrp.Velocity.Z)
     end
 
-    -- Air Swim
-    if Toggles.AirSwim.Value then
+    -- ===== AIR SWIM =====
+    if Toggles.SelfAirSwim.Value then
         hum:ChangeState(Enum.HumanoidStateType.Swimming)
     end
 
-    -- Spinbot / Anti Aim (Rage)
-    if Toggles.SpinBot.Value and hrp then
-        hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(Options.SpinSpeed.Value), 0)
+    -- ===== SPIN BOT =====
+    if Toggles.RageSpinBot.Value then
+        hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(Options.RageSpinSpeed.Value), 0)
     end
-    
-    -- Walk Fling (Spin randomly very fast to fling others on touch)
-    if Toggles.WalkFling.Value and hrp then
+
+    -- ===== WALK FLING =====
+    if Toggles.SelfWalkFling.Value then
         hrp.CFrame = hrp.CFrame * CFrame.Angles(
-            math.rad(math.random(-10,10)*100), 
-            math.rad(math.random(-10,10)*100), 
-            math.rad(math.random(-10,10)*100)
+            math.rad(math.random(-180, 180)),
+            math.rad(math.random(-180, 180)),
+            math.rad(math.random(-180, 180))
         )
+        hrp.Velocity = hrp.Velocity * 1.5
     end
-    
-    -- Hand Chams Update
-    if Toggles.HandChams.Value then
-        for _, part in pairs(char:GetChildren()) do
-            if part:IsA("BasePart") and (part.Name:find("Arm") or part.Name:find("Hand")) then
-                part.Material = Enum.Material[Options.HandMaterial.Value]
-                part.Color = Options.HandColor.Value
-                part.Transparency = Options.HandTransparency.Value
+
+    -- ===== GOON ANIMATION =====
+    if Toggles.SelfGoonAnim.Value then
+        local animator = hum:FindFirstChildOfClass("Animator")
+        if animator then
+            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                track:AdjustSpeed(3)
             end
         end
     end
-end)
 
--- // SILENT AIM (Metatable Hook) // --
--- Disclaimer: This is a universal silent aim template. It hooks Namecall.
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    
-    if not checkcaller() and method == "FireServer" and Options.AimMethod.Value == 'Silent Aim (Hook)' and Options.AimKey:GetState() then
-        -- Find Raycast/Mouse arguments and modify them (Basic Universal Implementation)
-        local target = GetClosestTarget()
-        if target and IsAlive(target) then
-            local part = target.Character:FindFirstChild(Options.AimPart.Value) or target.Character.HumanoidRootPart
-            for i, arg in pairs(args) do
-                if typeof(arg) == "Vector3" then
-                    args[i] = part.Position
-                elseif typeof(arg) == "CFrame" then
-                    args[i] = part.CFrame
-                elseif typeof(arg) == "Ray" then
-                    args[i] = Ray.new(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).Unit * 1000)
+    -- ===== HITBOX EXPANDER =====
+    if Toggles.RageHitboxEnabled.Value then
+        for _, v in ipairs(Players:GetPlayers()) do
+            if v ~= LocalPlayer and IsAlive(v) then
+                if Toggles.AimTeamCheck.Value and IsTeammate(v) then continue end
+
+                local targetChar = v.Character
+                local expandPart
+
+                if Toggles.RageHitboxHeadOnly.Value then
+                    expandPart = targetChar:FindFirstChild("Head")
+                else
+                    expandPart = targetChar:FindFirstChild("HumanoidRootPart")
+                end
+
+                if expandPart then
+                    expandPart.Size = Vector3.new(
+                        Options.RageHitboxSize.Value,
+                        Options.RageHitboxSize.Value,
+                        Options.RageHitboxSize.Value
+                    )
+                    expandPart.CanCollide = false
+
+                    if Toggles.RageHitboxShow.Value then
+                        expandPart.Transparency = 0.5
+                        expandPart.Material = Enum.Material.Neon
+                        expandPart.BrickColor = BrickColor.new(Options.RageHitboxColor.Value)
+                    else
+                        expandPart.Transparency = 1
+                    end
                 end
             end
-            return oldNamecall(self, unpack(args))
         end
     end
-    
-    return oldNamecall(self, ...)
+
+    -- ===== LOOK AT PLAYER =====
+    if Toggles.PlrLookAt.Value then
+        local target = Players:FindFirstChild(Options.PlrSelected.Value)
+        if target and IsAlive(target) then
+            hrp.CFrame = CFrame.new(hrp.Position, target.Character.HumanoidRootPart.Position)
+        end
+    end
 end)
 
--- ==========================================
--- =                FINALIZE                =
--- ==========================================
+-- ==============================================================================
+-- =                          CLEANUP ON UNLOAD                                 =
+-- ==============================================================================
+Library:OnUnload(function()
+    Library.Unloaded = true
 
-SaveManager:LoadAutoloadConfig()
-print("Lunar Universal Loaded Successfully. " .. tostring(1500) .. " Logic Checks Ready.")
+    -- Remove all Drawing objects
+    pcall(function() FOVCircle:Remove() end)
+    pcall(function() TargetLine:Remove() end)
+    pcall(function() RadarBackground:Remove() end)
+    pcall(function() RadarBorder:Remove() end)
+    pcall(function() RadarCenter:Remove() end)
+    pcall(function() DeathMarker:Remove() end)
+
+    -- Remove all ESP drawings
+    for player, esp in pairs(ESPCache) do
+        DestroyESPForPlayer(player)
+    end
+
+    -- Remove all radar dots
+    for _, dot in pairs(RadarCache) do
+        pcall(function() dot:Remove() end)
+    end
+
+    -- Remove chams container
+    pcall(function() ChamsContainer:Destroy() end)
+
+    -- Restore original values
+    Workspace.Gravity = OriginalGravity
+    Lighting.FogEnd = OriginalFog
+    Lighting.Ambient = OriginalAmbient
+    Lighting.ClockTime = OriginalTime
+    Lighting.GlobalShadows = true
+
+    -- Restore character
+    if IsAlive(LocalPlayer) then
+        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        hum.PlatformStand = false
+        hum.CameraOffset = Vector3.new(0, 0, 0)
+        Camera.CameraType = Enum.CameraType.Custom
+        LocalPlayer.CameraMinZoomDistance = 0.5
+        LocalPlayer.CameraMaxZoomDistance = 400
+    end
+end)
+
+-- ==============================================================================
+-- =                        LOAD SAVED CONFIG                                   =
+-- ==============================================================================
+pcall(function() SaveManager:LoadAutoloadConfig() end)
+
+Library:Notify("Lunar Universal v3.0 loaded successfully!", 5)
