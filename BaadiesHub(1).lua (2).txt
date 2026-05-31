@@ -1,0 +1,940 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║         B A A D I E S   H U B  —  by Limoon's          ║
+-- ║         Rayfield • Mobile v5.0 • Bug Fixed              ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- ══════════════════════════════════════════════════════════
+--  SERVICES
+-- ══════════════════════════════════════════════════════════
+
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace        = game:GetService("Workspace")
+local Lighting         = game:GetService("Lighting")
+local TeleportService  = game:GetService("TeleportService")
+local VirtualUser      = game:GetService("VirtualUser")
+
+local Camera      = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Character, Humanoid, HumanoidRP
+
+local function RefreshChar()
+    Character  = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    Humanoid   = Character:WaitForChild("Humanoid")
+    HumanoidRP = Character:WaitForChild("HumanoidRootPart")
+end
+RefreshChar()
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    RefreshChar()
+end)
+
+-- ══════════════════════════════════════════════════════════
+--  STATE
+-- ══════════════════════════════════════════════════════════
+
+local S = {
+    Aimbot=false, TriggerBot=false, TriggerDelay=0.05,
+    SilentAim=false, AimFOV=180, AimSmooth=20,
+    AimBone="Head", AimTeamCheck=true, AimVisCheck=true,
+    AimPredict=true, FOVCircle=true,
+
+    ESP=false, ESPBoxes=true, ESPBoxStyle="Corner",
+    ESPNames=true, ESPHealth=true, ESPTracers=false,
+    ESPDist=true, ESPSkeleton=false, ESPChams=false,
+    ESPMaxDist=1000, ESPTeamCheck=true,
+    ESPBoxColor=Color3.fromRGB(255,60,60),
+    ESPNameColor=Color3.fromRGB(255,255,255),
+    ESPTracerColor=Color3.fromRGB(255,60,60),
+    ESPSkelColor=Color3.fromRGB(255,255,255),
+    ESPChamsColor=Color3.fromRGB(255,60,60),
+    ESPChamsAlpha=0.5,
+
+    Speed=false, SpeedVal=30,
+    Fly=false, FlySpeed=50,
+    Noclip=false, InfJump=false,
+    BunnyHop=false, AntiAFK=false, InfStamina=false,
+
+    HitboxExpand=false, HitboxSize=8,
+    Reach=false, ReachDist=15,
+    AntiKB=false, AutoParry=false,
+    GodMode=false, AutoRecover=false,
+
+    Fullbright=false, NoFog=false, NoBloom=false,
+    Crosshair=false, CamFOV=70,
+    ThirdPerson=false, ThirdDist=10,
+}
+
+-- ══════════════════════════════════════════════════════════
+--  UTILITAIRES
+-- ══════════════════════════════════════════════════════════
+
+local function GetChar(p)  return p and p.Character end
+local function GetHRP(p)   local c=GetChar(p); return c and c:FindFirstChild("HumanoidRootPart") end
+local function GetHum(p)   local c=GetChar(p); return c and c:FindFirstChildOfClass("Humanoid") end
+local function IsAlive(p)  local h=GetHum(p);  return h and h.Health > 0 end
+local function SameTeam(p) return LocalPlayer.Team ~= nil and p.Team == LocalPlayer.Team end
+
+local function W2S(pos)
+    local ok, sp = pcall(function()
+        return Camera:WorldToViewportPoint(pos)
+    end)
+    if not ok then return Vector2.new(0,0), false, 0 end
+    return Vector2.new(sp.X, sp.Y), sp.Z > 0, sp.Z
+end
+
+local function GetBone(char, boneName)
+    if not char then return nil end
+    local b = char:FindFirstChild(boneName)
+    if b then return b end
+    -- R15 fallbacks
+    local fallbacks = {
+        Head       = {"Head","UpperTorso","HumanoidRootPart"},
+        Torso      = {"UpperTorso","LowerTorso","HumanoidRootPart"},
+        ["Left Arm"] = {"LeftUpperArm","LeftLowerArm","UpperTorso"},
+        ["Right Arm"]= {"RightUpperArm","RightLowerArm","UpperTorso"},
+    }
+    if fallbacks[boneName] then
+        for _, fb in ipairs(fallbacks[boneName]) do
+            local p = char:FindFirstChild(fb)
+            if p then return p end
+        end
+    end
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
+local function CanSee(origin, target)
+    local dir = target - origin
+    if dir.Magnitude < 0.1 then return true end
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    local filtered = {LocalPlayer.Character}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then table.insert(filtered, p.Character) end
+    end
+    params.FilterDescendantsInstances = filtered
+    local res = Workspace:Raycast(origin, dir, params)
+    return res == nil
+end
+
+local function ClosestPlayer()
+    local best, bestDist = nil, S.AimFOV
+    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LocalPlayer then continue end
+        if S.AimTeamCheck and SameTeam(p) then continue end
+        if not IsAlive(p) then continue end
+        local char = GetChar(p); if not char then continue end
+        local bone = GetBone(char, S.AimBone); if not bone then continue end
+        local sp, on = W2S(bone.Position)
+        if not on then continue end
+        if S.AimVisCheck and not CanSee(Camera.CFrame.Position, bone.Position) then continue end
+        local d = (sp - center).Magnitude
+        if d < bestDist then bestDist = d; best = p end
+    end
+    return best
+end
+
+local function GetPlayerUnderCrosshair()
+    local unitRay = Camera:ScreenPointToRay(
+        Camera.ViewportSize.X/2,
+        Camera.ViewportSize.Y/2
+    )
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    local res = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 2000, params)
+    if not res then return nil end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LocalPlayer then continue end
+        if S.AimTeamCheck and SameTeam(p) then continue end
+        if not IsAlive(p) then continue end
+        if p.Character and res.Instance:IsDescendantOf(p.Character) then return p end
+    end
+    return nil
+end
+
+local function Notif(t, m, d)
+    Rayfield:Notify({ Title=t, Content=m, Duration=d or 3, Image=4483362458 })
+end
+
+-- ══════════════════════════════════════════════════════════
+--  DRAWINGS — FOV + CROSSHAIR
+-- ══════════════════════════════════════════════════════════
+
+local FOVDraw = Drawing.new("Circle")
+FOVDraw.Visible=false; FOVDraw.Thickness=1.5; FOVDraw.Filled=false
+FOVDraw.Color=Color3.fromRGB(255,60,60); FOVDraw.Transparency=1
+
+local CHLines, CHDot = {}, Drawing.new("Circle")
+for i=1,4 do
+    local l=Drawing.new("Line"); l.Visible=false; l.Thickness=2
+    l.Color=Color3.fromRGB(255,60,60); CHLines[i]=l
+end
+CHDot.Visible=false; CHDot.Radius=2; CHDot.Filled=true
+CHDot.Color=Color3.fromRGB(255,60,60); CHDot.Transparency=1
+
+-- ══════════════════════════════════════════════════════════
+--  ESP OBJECTS
+-- ══════════════════════════════════════════════════════════
+
+local ESPPool = {}
+
+-- Squelette R6
+local SKEL_R6 = {
+    {"Head","Torso"},
+    {"Torso","Left Arm"},{"Torso","Right Arm"},
+    {"Torso","Left Leg"},{"Torso","Right Leg"},
+    {"Left Arm","Left Leg"},{"Right Arm","Right Leg"},
+    {"HumanoidRootPart","Torso"},
+}
+-- Squelette R15
+local SKEL_R15 = {
+    {"Head","UpperTorso"},
+    {"UpperTorso","LowerTorso"},
+    {"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},
+    {"UpperTorso","RightUpperArm"},{"RightUpperArm","RightLowerArm"},{"RightLowerArm","RightHand"},
+    {"LowerTorso","LeftUpperLeg"},{"LeftUpperLeg","LeftLowerLeg"},{"LeftLowerLeg","LeftFoot"},
+    {"LowerTorso","RightUpperLeg"},{"RightUpperLeg","RightLowerLeg"},{"RightLowerLeg","RightFoot"},
+}
+
+local function NewLine(col, thick)
+    local l = Drawing.new("Line")
+    l.Visible=false; l.Color=col or Color3.new(1,1,1); l.Thickness=thick or 1.5
+    return l
+end
+local function NewText(size, col)
+    local t = Drawing.new("Text")
+    t.Visible=false; t.Size=size or 13; t.Center=true
+    t.Outline=true; t.OutlineColor=Color3.new(0,0,0)
+    t.Color=col or Color3.new(1,1,1)
+    return t
+end
+local function NewSquare(filled, col, alpha)
+    local s = Drawing.new("Square")
+    s.Visible=false; s.Filled=filled; s.Color=col or Color3.new(1,1,1)
+    s.Transparency=alpha or 1; return s
+end
+
+local function MakeESP(player)
+    if player == LocalPlayer then return end
+    local o = {}
+    -- Corner box (8 lignes)
+    o.CL = {}
+    for i=1,8 do o.CL[i]=NewLine(Color3.fromRGB(255,60,60),2) end
+    -- Full box
+    o.BoxBG  = NewSquare(false, Color3.new(0,0,0), 1)
+    o.BoxBG.Thickness = 3
+    o.Box    = NewSquare(false, Color3.fromRGB(255,60,60), 1)
+    o.Box.Thickness = 1.5
+    -- Fill box (très transparent pour l'effet "chams 2D")
+    o.BoxFill= NewSquare(true, Color3.fromRGB(255,60,60), 0.85)
+    -- Nom
+    o.Name   = NewText(14, Color3.new(1,1,1))
+    -- Tool tag
+    o.Tool   = NewText(11, Color3.fromRGB(255,210,50))
+    -- HP bar bg + fill + text
+    o.HPBg   = NewSquare(true, Color3.fromRGB(15,15,15), 0.5)
+    o.HPFill = NewSquare(true, Color3.fromRGB(80,255,80), 1)
+    o.HPTxt  = NewText(10, Color3.new(1,1,1))
+    -- Distance
+    o.Dist   = NewText(11, Color3.fromRGB(200,200,200))
+    -- Tracer
+    o.Tracer = NewLine(Color3.fromRGB(255,60,60), 1)
+    -- Skeleton (max 15 lignes)
+    o.Skel = {}
+    for i=1,15 do o.Skel[i]=NewLine(Color3.fromRGB(255,255,255),1.2) end
+    -- Chams SelectionBox
+    o.Chams = Instance.new("SelectionBox")
+    o.Chams.LineThickness=0.02
+    o.Chams.SurfaceTransparency=0.5
+    o.Chams.Color3=Color3.fromRGB(255,60,60)
+    o.Chams.SurfaceColor3=Color3.fromRGB(255,60,60)
+    o.Chams.Parent=Workspace
+    ESPPool[player] = o
+end
+
+local function DestroyESP(player)
+    local o = ESPPool[player]; if not o then return end
+    for _, v in pairs(o) do
+        if typeof(v)=="table" then for _,d in pairs(v) do pcall(function() d:Remove() end) end
+        elseif typeof(v)=="Instance" then pcall(function() v:Destroy() end)
+        else pcall(function() v:Remove() end) end
+    end
+    ESPPool[player] = nil
+end
+
+for _, p in ipairs(Players:GetPlayers()) do MakeESP(p) end
+Players.PlayerAdded:Connect(MakeESP)
+Players.PlayerRemoving:Connect(DestroyESP)
+
+-- Helper: dessiner corner box
+local function DrawCorners(o, x, y, w, h, col)
+    local L = math.min(w, h) * 0.22
+    -- format: {from, to}
+    local pts = {
+        {Vector2.new(x,y),       Vector2.new(x+L,y)},
+        {Vector2.new(x,y),       Vector2.new(x,y+L)},
+        {Vector2.new(x+w,y),     Vector2.new(x+w-L,y)},
+        {Vector2.new(x+w,y),     Vector2.new(x+w,y+L)},
+        {Vector2.new(x,y+h),     Vector2.new(x+L,y+h)},
+        {Vector2.new(x,y+h),     Vector2.new(x,y+h-L)},
+        {Vector2.new(x+w,y+h),   Vector2.new(x+w-L,y+h)},
+        {Vector2.new(x+w,y+h),   Vector2.new(x+w,y+h-L)},
+    }
+    for i,p in ipairs(pts) do
+        o.CL[i].Visible=true; o.CL[i].Color=col
+        o.CL[i].From=p[1]; o.CL[i].To=p[2]
+    end
+end
+
+local function HideCorners(o)
+    for _,l in ipairs(o.CL) do l.Visible=false end
+end
+
+-- ══════════════════════════════════════════════════════════
+--  FLY
+-- ══════════════════════════════════════════════════════════
+
+local FlyBV, FlyBG
+local function EnableFly()
+    if not HumanoidRP or FlyBV then return end
+    FlyBV=Instance.new("BodyVelocity"); FlyBV.MaxForce=Vector3.new(1e9,1e9,1e9); FlyBV.Velocity=Vector3.zero; FlyBV.Parent=HumanoidRP
+    FlyBG=Instance.new("BodyGyro");    FlyBG.MaxTorque=Vector3.new(1e9,1e9,1e9); FlyBG.D=100; FlyBG.Parent=HumanoidRP
+end
+local function DisableFly()
+    if FlyBV then FlyBV:Destroy(); FlyBV=nil end
+    if FlyBG then FlyBG:Destroy(); FlyBG=nil end
+end
+
+-- ══════════════════════════════════════════════════════════
+--  TRIGGERBOT
+-- ══════════════════════════════════════════════════════════
+
+local trigCD = false
+task.spawn(function()
+    while true do
+        task.wait(0.01)
+        if S.TriggerBot and not trigCD then
+            if GetPlayerUnderCrosshair() then
+                trigCD = true
+                task.wait(S.TriggerDelay)
+                pcall(function()
+                    game:GetService("VirtualInputManager"):SendMouseButtonEvent(
+                        math.floor(Camera.ViewportSize.X/2),
+                        math.floor(Camera.ViewportSize.Y/2),
+                        0, true, game, 0)
+                end)
+                task.wait(0.06)
+                pcall(function()
+                    game:GetService("VirtualInputManager"):SendMouseButtonEvent(
+                        math.floor(Camera.ViewportSize.X/2),
+                        math.floor(Camera.ViewportSize.Y/2),
+                        0, false, game, 0)
+                end)
+                task.wait(0.12)
+                trigCD = false
+            end
+        end
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════
+--  RENDER LOOP
+-- ══════════════════════════════════════════════════════════
+
+RunService.RenderStepped:Connect(function()
+    if not Camera then return end
+    local vp = Camera.ViewportSize
+    local cx, cy = vp.X/2, vp.Y/2
+
+    -- ── FOV Circle ──
+    FOVDraw.Visible = S.FOVCircle and S.Aimbot
+    if FOVDraw.Visible then
+        FOVDraw.Position=Vector2.new(cx,cy); FOVDraw.Radius=S.AimFOV
+    end
+
+    -- ── Aimbot (auto-lock, pas de touche sur mobile) ──
+    if S.Aimbot then
+        local target = ClosestPlayer()
+        if target then
+            local char = GetChar(target)
+            if char then
+                local bone = GetBone(char, S.AimBone)
+                if bone then
+                    local pos = bone.Position
+                    if S.AimPredict then
+                        local hrp2 = GetHRP(target)
+                        if hrp2 then
+                            pos = pos + hrp2.AssemblyLinearVelocity * 0.055
+                        end
+                    end
+                    if not S.SilentAim then
+                        local smooth = math.clamp(S.AimSmooth, 1, 100) / 100
+                        local targetCF = CFrame.new(Camera.CFrame.Position, pos)
+                        Camera.CFrame = Camera.CFrame:Lerp(targetCF, smooth)
+                    end
+                end
+            end
+        end
+    end
+
+    -- ── Camera FOV ──
+    Camera.FieldOfView = S.CamFOV
+
+    -- ── Third Person ──
+    if S.ThirdPerson and HumanoidRP then
+        local offset = Vector3.new(0, 2, S.ThirdDist)
+        Camera.CFrame = CFrame.new(HumanoidRP.Position + offset, HumanoidRP.Position)
+    end
+
+    -- ── Crosshair ──
+    local sz, gap = 12, 5
+    local crds = {
+        {Vector2.new(cx-sz-gap,cy), Vector2.new(cx-gap,cy)},
+        {Vector2.new(cx+gap,cy),    Vector2.new(cx+sz+gap,cy)},
+        {Vector2.new(cx,cy-sz-gap), Vector2.new(cx,cy-gap)},
+        {Vector2.new(cx,cy+gap),    Vector2.new(cx,cy+sz+gap)},
+    }
+    for i,l in ipairs(CHLines) do
+        l.Visible=S.Crosshair
+        if S.Crosshair then l.From=crds[i][1]; l.To=crds[i][2] end
+    end
+    CHDot.Visible=S.Crosshair
+    if S.Crosshair then CHDot.Position=Vector2.new(cx,cy) end
+
+    -- ══════════════════════════════════════════════════════
+    --  ESP
+    -- ══════════════════════════════════════════════════════
+
+    for player, o in pairs(ESPPool) do
+
+        local function hide()
+            HideCorners(o)
+            o.BoxBG.Visible=false; o.Box.Visible=false; o.BoxFill.Visible=false
+            o.Name.Visible=false; o.Tool.Visible=false
+            o.HPBg.Visible=false; o.HPFill.Visible=false; o.HPTxt.Visible=false
+            o.Dist.Visible=false; o.Tracer.Visible=false
+            for _,l in ipairs(o.Skel) do l.Visible=false end
+            o.Chams.Adornee=nil
+        end
+
+        if not S.ESP or not IsAlive(player) then hide(); continue end
+        if S.ESPTeamCheck and SameTeam(player) then hide(); continue end
+        local char = GetChar(player); if not char then hide(); continue end
+        local hrp  = char:FindFirstChild("HumanoidRootPart")
+        local hum  = GetHum(player)
+        if not hrp or not hum or not HumanoidRP then hide(); continue end
+
+        local dist = (HumanoidRP.Position - hrp.Position).Magnitude
+        if dist > S.ESPMaxDist then hide(); continue end
+
+        -- ── Calcul bounding box 2D fiable ──
+        -- On projette head + feet + left/right des épaules
+        local isR15 = char:FindFirstChild("UpperTorso") ~= nil
+
+        local topPart    = char:FindFirstChild("Head") or char:FindFirstChild("UpperTorso")
+        local bottomPart = isR15 and (char:FindFirstChild("LeftFoot") or char:FindFirstChild("RightFoot") or char:FindFirstChild("LowerTorso")) or (char:FindFirstChild("Left Leg") or char:FindFirstChild("Right Leg") or char:FindFirstChild("Torso"))
+
+        if not topPart or not bottomPart then hide(); continue end
+
+        local topSP,   topOn    = W2S(topPart.Position    + Vector3.new(0, topPart.Size.Y/2 + 0.1, 0))
+        local bottomSP,bottomOn = W2S(bottomPart.Position - Vector3.new(0, bottomPart.Size.Y/2 + 0.15, 0))
+
+        if not topOn and not bottomOn then hide(); continue end
+
+        -- Box height
+        local boxH = math.abs(topSP.Y - bottomSP.Y)
+        if boxH < 5 then hide(); continue end  -- trop petit = derrière/loin
+        local boxW = boxH * 0.5
+        local bx   = topSP.X - boxW/2
+        local by   = topSP.Y
+
+        local hp  = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
+        local hpR = math.floor(255*(1-hp))
+        local hpG = math.floor(255*hp)
+        local hpC = Color3.fromRGB(hpR, hpG, 30)
+        local bCol = S.ESPBoxColor
+
+        -- ── Box ──
+        if S.ESPBoxes then
+            if S.ESPBoxStyle == "Corner" then
+                o.Box.Visible=false; o.BoxBG.Visible=false; o.BoxFill.Visible=false
+                DrawCorners(o, bx, by, boxW, boxH, bCol)
+            else
+                HideCorners(o)
+                o.BoxBG.Visible=true; o.BoxBG.Position=Vector2.new(bx-1,by-1); o.BoxBG.Size=Vector2.new(boxW+2,boxH+2)
+                o.Box.Visible=true;   o.Box.Color=bCol; o.Box.Position=Vector2.new(bx,by); o.Box.Size=Vector2.new(boxW,boxH)
+                o.BoxFill.Visible=false
+            end
+        else
+            HideCorners(o); o.Box.Visible=false; o.BoxBG.Visible=false; o.BoxFill.Visible=false
+        end
+
+        -- ── Nom + Outil ──
+        if S.ESPNames then
+            o.Name.Visible=true; o.Name.Color=S.ESPNameColor
+            o.Name.Position=Vector2.new(bx+boxW/2, by-17)
+            o.Name.Text=player.DisplayName
+            local tool = char:FindFirstChildWhichIsA("Tool")
+            if tool then
+                o.Tool.Visible=true
+                o.Tool.Position=Vector2.new(bx+boxW/2, by-29)
+                o.Tool.Text="["..tool.Name.."]"
+            else o.Tool.Visible=false end
+        else o.Name.Visible=false; o.Tool.Visible=false end
+
+        -- ── Barre de vie ──
+        if S.ESPHealth then
+            local barX = bx - 9
+            local barW = 5
+            o.HPBg.Visible=true; o.HPBg.Position=Vector2.new(barX, by); o.HPBg.Size=Vector2.new(barW, boxH)
+            local fillH = boxH * hp
+            o.HPFill.Visible=true; o.HPFill.Color=hpC
+            o.HPFill.Position=Vector2.new(barX, by + boxH - fillH)
+            o.HPFill.Size=Vector2.new(barW, fillH)
+            o.HPTxt.Visible=true; o.HPTxt.Color=Color3.new(1,1,1)
+            o.HPTxt.Position=Vector2.new(barX + barW/2, by + boxH + 2)
+            o.HPTxt.Text=math.floor(hum.Health).."hp"
+        else o.HPBg.Visible=false; o.HPFill.Visible=false; o.HPTxt.Visible=false end
+
+        -- ── Distance ──
+        if S.ESPDist then
+            o.Dist.Visible=true
+            o.Dist.Position=Vector2.new(bx+boxW/2, by+boxH+4)
+            o.Dist.Text=string.format("%.0fm", dist)
+        else o.Dist.Visible=false end
+
+        -- ── Traceur ──
+        if S.ESPTracers then
+            o.Tracer.Visible=true; o.Tracer.Color=S.ESPTracerColor
+            o.Tracer.From=Vector2.new(cx, cy)
+            o.Tracer.To=Vector2.new(topSP.X, topSP.Y)
+        else o.Tracer.Visible=false end
+
+        -- ── Squelette (R6 / R15 auto) ──
+        if S.ESPSkeleton then
+            local boneList = isR15 and SKEL_R15 or SKEL_R6
+            for i=1,15 do o.Skel[i].Visible=false end
+            for i, pair in ipairs(boneList) do
+                if i > 15 then break end
+                local b1=char:FindFirstChild(pair[1])
+                local b2=char:FindFirstChild(pair[2])
+                if b1 and b2 then
+                    local sp1,on1 = W2S(b1.Position)
+                    local sp2,on2 = W2S(b2.Position)
+                    if on1 or on2 then
+                        o.Skel[i].Visible=true; o.Skel[i].Color=S.ESPSkelColor
+                        o.Skel[i].From=sp1; o.Skel[i].To=sp2
+                    end
+                end
+            end
+        else for _,l in ipairs(o.Skel) do l.Visible=false end end
+
+        -- ── Chams ──
+        if S.ESPChams then
+            o.Chams.Adornee=char
+            o.Chams.Color3=S.ESPChamsColor
+            o.Chams.SurfaceColor3=S.ESPChamsColor
+            o.Chams.SurfaceTransparency=S.ESPChamsAlpha
+        else o.Chams.Adornee=nil end
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════
+--  HEARTBEAT
+-- ══════════════════════════════════════════════════════════
+
+RunService.Heartbeat:Connect(function()
+    if not HumanoidRP then return end
+
+    -- Speed — cappé à 500
+    if S.Speed then
+        local h=GetHum(LocalPlayer)
+        if h then h.WalkSpeed = math.clamp(S.SpeedVal, 16, 500) end
+    end
+
+    -- Bunny Hop
+    if S.BunnyHop then
+        local h=GetHum(LocalPlayer)
+        if h and h.FloorMaterial ~= Enum.Material.Air then
+            h:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+
+    -- Noclip
+    if S.Noclip and Character then
+        for _, p in ipairs(Character:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide=false end
+        end
+    end
+
+    -- Anti-KB
+    if S.AntiKB then
+        local v = HumanoidRP.Velocity
+        HumanoidRP.Velocity = Vector3.new(v.X*0.08, v.Y, v.Z*0.08)
+    end
+
+    -- Hitbox Expand
+    if S.HitboxExpand then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                local h = GetHRP(p)
+                if h then h.Size=Vector3.new(S.HitboxSize, S.HitboxSize, S.HitboxSize) end
+            end
+        end
+    end
+
+    -- Fullbright
+    if S.Fullbright then
+        Lighting.Brightness=2; Lighting.ClockTime=14
+        Lighting.GlobalShadows=false
+        Lighting.Ambient=Color3.fromRGB(255,255,255)
+        Lighting.OutdoorAmbient=Color3.fromRGB(255,255,255)
+        Lighting.FogEnd=1e6
+    end
+
+    if S.NoFog then Lighting.FogEnd=1e6; Lighting.FogStart=1e6 end
+
+    if S.NoBloom then
+        for _,e in ipairs(Lighting:GetDescendants()) do
+            if e:IsA("BloomEffect") or e:IsA("SunRaysEffect") or e:IsA("DepthOfFieldEffect") then
+                e.Enabled=false
+            end
+        end
+    end
+
+    if S.InfStamina then
+        for _,v in ipairs(LocalPlayer:GetDescendants()) do
+            if v:IsA("NumberValue") then
+                local n=v.Name:lower()
+                if n:find("stamina") or n:find("energy") or n:find("mana") then v.Value=1e4 end
+            end
+        end
+    end
+
+    -- Fly
+    if S.Fly then
+        if not FlyBV or not FlyBV.Parent then EnableFly() end
+        local dir=Vector3.zero; local UIS=UserInputService
+        if UIS:IsKeyDown(Enum.KeyCode.W) then dir=dir+Camera.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then dir=dir-Camera.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then dir=dir-Camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then dir=dir+Camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space)     then dir=dir+Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then dir=dir-Vector3.new(0,1,0) end
+        if dir.Magnitude > 0 then dir=dir.Unit end
+        if FlyBV then FlyBV.Velocity=dir*S.FlySpeed end
+        if FlyBG then FlyBG.CFrame=Camera.CFrame end
+    else
+        DisableFly()
+    end
+end)
+
+UserInputService.JumpRequest:Connect(function()
+    if S.InfJump then local h=GetHum(LocalPlayer); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end end
+end)
+
+LocalPlayer.Idled:Connect(function()
+    if S.AntiAFK then
+        VirtualUser:Button2Down(Vector2.zero, Camera.CFrame)
+        task.wait(0.1)
+        VirtualUser:Button2Up(Vector2.zero, Camera.CFrame)
+    end
+end)
+
+task.spawn(function()
+    while true do task.wait(0.05)
+        if S.GodMode then local h=GetHum(LocalPlayer); if h then h.Health=h.MaxHealth end end
+    end
+end)
+
+task.spawn(function()
+    while true do task.wait(0.15)
+        if S.AutoRecover then local h=GetHum(LocalPlayer); if h and h.Health<h.MaxHealth then h.Health=h.Health+3 end end
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════
+--  UI RAYFIELD
+-- ══════════════════════════════════════════════════════════
+
+local Window = Rayfield:CreateWindow({
+    Name="Baadies Hub", LoadingTitle="Baadies Hub",
+    LoadingSubtitle="by Limoon's  •  v5.0 Mobile",
+    Theme="DarkBlue", DisableBuildWarnings=true,
+    ConfigurationSaving={Enabled=true, FolderName="BaadiesHub", FileName="Config"},
+    KeySystem=false,
+})
+
+-- ═══════════════════ 🎯 AIMBOT ═══════════════════
+
+local AT = Window:CreateTab("🎯 Aimbot", 4483362458)
+
+AT:CreateSection("Core Mobile (auto-lock, sans touche)")
+
+AT:CreateToggle({Name="Aimbot (auto-lock permanent)", CurrentValue=false, Flag="Aimbot",
+    Callback=function(v) S.Aimbot=v end})
+
+AT:CreateToggle({Name="Triggerbot (clique auto si ennemi visé)", CurrentValue=false, Flag="TriggerBot",
+    Callback=function(v) S.TriggerBot=v end})
+
+AT:CreateSlider({Name="Délai Triggerbot", Range={0,500}, Increment=10, Suffix=" ms", CurrentValue=50, Flag="TriggerDelay",
+    Callback=function(v) S.TriggerDelay=v/1000 end})
+
+AT:CreateToggle({Name="Silent Aim", CurrentValue=false, Flag="SilentAim",
+    Callback=function(v) S.SilentAim=v end})
+
+AT:CreateSection("Filtres")
+
+AT:CreateToggle({Name="Wallcheck", CurrentValue=true, Flag="AimVisCheck",
+    Callback=function(v) S.AimVisCheck=v end})
+
+AT:CreateToggle({Name="Team Check", CurrentValue=true, Flag="AimTeamCheck",
+    Callback=function(v) S.AimTeamCheck=v end})
+
+AT:CreateToggle({Name="Prédiction de Mouvement", CurrentValue=true, Flag="AimPredict",
+    Callback=function(v) S.AimPredict=v end})
+
+AT:CreateToggle({Name="Afficher Cercle FOV", CurrentValue=true, Flag="FOVCircle",
+    Callback=function(v) S.FOVCircle=v end})
+
+AT:CreateSection("Réglages")
+
+AT:CreateSlider({Name="FOV", Range={10,500}, Increment=5, Suffix=" px", CurrentValue=180, Flag="AimFOV",
+    Callback=function(v) S.AimFOV=v end})
+
+AT:CreateSlider({Name="Smoothing (1=instantané, 100=lent)", Range={1,100}, Increment=1, Suffix="%", CurrentValue=20, Flag="AimSmooth",
+    Callback=function(v) S.AimSmooth=v end})
+
+AT:CreateDropdown({Name="Os Ciblé", Options={"Head","UpperTorso","HumanoidRootPart","Torso","Left Arm","Right Arm"},
+    CurrentOption={"Head"}, Flag="AimBone",
+    Callback=function(v) S.AimBone=v[1] or "Head" end})
+
+-- ═══════════════════ 👁 ESP ═══════════════════
+
+local ET = Window:CreateTab("👁 ESP", 4483362458)
+
+ET:CreateSection("Activation")
+
+ET:CreateToggle({Name="ESP Global", CurrentValue=false, Flag="ESP",
+    Callback=function(v) S.ESP=v end})
+
+ET:CreateDropdown({Name="Style de Box", Options={"Corner","Full"},
+    CurrentOption={"Corner"}, Flag="ESPBoxStyle",
+    Callback=function(v) S.ESPBoxStyle=v[1] or "Corner" end})
+
+ET:CreateToggle({Name="Boîtes", CurrentValue=true, Flag="ESPBoxes",
+    Callback=function(v) S.ESPBoxes=v end})
+
+ET:CreateToggle({Name="Noms + Outil tenu", CurrentValue=true, Flag="ESPNames",
+    Callback=function(v) S.ESPNames=v end})
+
+ET:CreateToggle({Name="Barre de Santé + HP", CurrentValue=true, Flag="ESPHealth",
+    Callback=function(v) S.ESPHealth=v end})
+
+ET:CreateToggle({Name="Traceurs", CurrentValue=false, Flag="ESPTracers",
+    Callback=function(v) S.ESPTracers=v end})
+
+ET:CreateToggle({Name="Distance", CurrentValue=true, Flag="ESPDist",
+    Callback=function(v) S.ESPDist=v end})
+
+ET:CreateToggle({Name="Squelette (R6+R15 auto)", CurrentValue=false, Flag="ESPSkeleton",
+    Callback=function(v) S.ESPSkeleton=v end})
+
+ET:CreateToggle({Name="Chams (SelectionBox 3D)", CurrentValue=false, Flag="ESPChams",
+    Callback=function(v) S.ESPChams=v
+        if not v then for _,o in pairs(ESPPool) do o.Chams.Adornee=nil end end
+    end})
+
+ET:CreateToggle({Name="Team Check", CurrentValue=true, Flag="ESPTeamCheck",
+    Callback=function(v) S.ESPTeamCheck=v end})
+
+ET:CreateSection("Paramètres")
+
+ET:CreateSlider({Name="Distance Max", Range={50,3000}, Increment=50, Suffix=" m", CurrentValue=1000, Flag="ESPMaxDist",
+    Callback=function(v) S.ESPMaxDist=v end})
+
+ET:CreateSlider({Name="Transparence Chams", Range={0,95}, Increment=5, Suffix="%", CurrentValue=50, Flag="ESPChamsAlpha",
+    Callback=function(v) S.ESPChamsAlpha=v/100 end})
+
+-- ═══════════════════ 🏃 MOUVEMENT ═══════════════════
+
+local MT = Window:CreateTab("🏃 Mouvement", 4483362458)
+
+MT:CreateSection("Vitesse & Vol")
+
+MT:CreateToggle({Name="Speed Hack", CurrentValue=false, Flag="Speed",
+    Callback=function(v) S.Speed=v
+        if not v then local h=GetHum(LocalPlayer); if h then h.WalkSpeed=16 end end
+    end})
+
+MT:CreateSlider({Name="Vitesse (max 500)", Range={16,500}, Increment=2, Suffix=" wu/s", CurrentValue=30, Flag="SpeedVal",
+    Callback=function(v) S.SpeedVal=math.clamp(v,16,500) end})
+
+MT:CreateToggle({Name="Fly", CurrentValue=false, Flag="Fly",
+    Callback=function(v) S.Fly=v; if not v then DisableFly() end end})
+
+MT:CreateSlider({Name="Vitesse de Vol", Range={5,300}, Increment=5, Suffix=" wu/s", CurrentValue=50, Flag="FlySpeed",
+    Callback=function(v) S.FlySpeed=v end})
+
+MT:CreateSection("Mobilité")
+
+MT:CreateToggle({Name="Noclip",         CurrentValue=false, Flag="Noclip",  Callback=function(v) S.Noclip=v end})
+MT:CreateToggle({Name="Saut Infini",    CurrentValue=false, Flag="InfJump", Callback=function(v) S.InfJump=v end})
+MT:CreateToggle({Name="Bunny Hop",      CurrentValue=false, Flag="BHop",    Callback=function(v) S.BunnyHop=v end})
+MT:CreateToggle({Name="Anti-AFK",       CurrentValue=false, Flag="AntiAFK", Callback=function(v) S.AntiAFK=v end})
+MT:CreateToggle({Name="Stamina Infinie",CurrentValue=false, Flag="InfSt",   Callback=function(v) S.InfStamina=v end})
+
+MT:CreateSection("Téléport")
+
+MT:CreateButton({Name="→ Spawn",
+    Callback=function()
+        local sp=Workspace:FindFirstChildWhichIsA("SpawnLocation")
+        if sp and HumanoidRP then HumanoidRP.CFrame=sp.CFrame+Vector3.new(0,3,0); Notif("Teleport","Au spawn!",2)
+        else Notif("Erreur","Pas de SpawnLocation.",2) end
+    end})
+
+MT:CreateButton({Name="Anti-Stuck (+5 studs)",
+    Callback=function()
+        if HumanoidRP then HumanoidRP.CFrame=HumanoidRP.CFrame+Vector3.new(0,5,0) end
+    end})
+
+MT:CreateInput({Name="Teleport → Joueur", CurrentValue="", PlaceholderText="Nom exact...",
+    RemoveTextAfterFocusLost=false,
+    Callback=function(name)
+        if name=="" then return end
+        local t=Players:FindFirstChild(name)
+        if t then local h=GetHRP(t)
+            if h and HumanoidRP then HumanoidRP.CFrame=h.CFrame+Vector3.new(0,3,0); Notif("Teleport","→ "..name,2) end
+        else Notif("Erreur","'"..name.."' introuvable.",2) end
+    end})
+
+-- ═══════════════════ ⚔ COMBAT ═══════════════════
+
+local CT = Window:CreateTab("⚔ Combat", 4483362458)
+
+CT:CreateSection("Offensif")
+
+CT:CreateToggle({Name="Hitbox Expander", CurrentValue=false, Flag="HBX",
+    Callback=function(v) S.HitboxExpand=v end})
+
+CT:CreateSlider({Name="Taille Hitbox", Range={4,40}, Increment=1, Suffix=" studs", CurrentValue=8, Flag="HBSize",
+    Callback=function(v) S.HitboxSize=v end})
+
+CT:CreateToggle({Name="Reach", CurrentValue=false, Flag="Reach",
+    Callback=function(v) S.Reach=v end})
+
+CT:CreateSlider({Name="Distance Reach", Range={6,60}, Increment=1, Suffix=" studs", CurrentValue=15, Flag="ReachDist",
+    Callback=function(v) S.ReachDist=v end})
+
+CT:CreateSection("Défensif")
+
+CT:CreateToggle({Name="Anti-Knockback",     CurrentValue=false, Flag="AntiKB",  Callback=function(v) S.AntiKB=v end})
+CT:CreateToggle({Name="Auto-Parry/Block",   CurrentValue=false, Flag="AParry",  Callback=function(v) S.AutoParry=v end})
+CT:CreateToggle({Name="God Mode (HP max)",  CurrentValue=false, Flag="GodMode", Callback=function(v) S.GodMode=v end})
+CT:CreateToggle({Name="Auto-Recover HP",    CurrentValue=false, Flag="ARecover",Callback=function(v) S.AutoRecover=v end})
+
+-- ═══════════════════ ✨ VISUELS ═══════════════════
+
+local VT = Window:CreateTab("✨ Visuels", 4483362458)
+
+VT:CreateSection("Environnement")
+
+VT:CreateToggle({Name="Fullbright", CurrentValue=false, Flag="Fullbright",
+    Callback=function(v) S.Fullbright=v
+        if not v then Lighting.Brightness=1;Lighting.ClockTime=14;Lighting.GlobalShadows=true;Lighting.Ambient=Color3.fromRGB(70,70,70);Lighting.OutdoorAmbient=Color3.fromRGB(128,128,128) end
+    end})
+
+VT:CreateToggle({Name="No Fog",            CurrentValue=false, Flag="NoFog",   Callback=function(v) S.NoFog=v end})
+VT:CreateToggle({Name="No Bloom/Sun Rays", CurrentValue=false, Flag="NoBloom", Callback=function(v) S.NoBloom=v end})
+
+VT:CreateSection("Caméra")
+
+VT:CreateToggle({Name="Crosshair + point central", CurrentValue=false, Flag="Crosshair",
+    Callback=function(v) S.Crosshair=v end})
+
+VT:CreateSlider({Name="FOV Caméra", Range={40,120}, Increment=1, Suffix="°", CurrentValue=70, Flag="CamFOV",
+    Callback=function(v) S.CamFOV=v end})
+
+VT:CreateToggle({Name="Troisième Personne", CurrentValue=false, Flag="ThirdP",
+    Callback=function(v) S.ThirdPerson=v end})
+
+VT:CreateSlider({Name="Distance 3P", Range={3,40}, Increment=1, Suffix=" studs", CurrentValue=10, Flag="ThirdDist",
+    Callback=function(v) S.ThirdDist=v end})
+
+-- ═══════════════════ ⚙ MISC ═══════════════════
+
+local MiscT = Window:CreateTab("⚙ Misc", 4483362458)
+
+MiscT:CreateSection("Serveur")
+
+MiscT:CreateButton({Name="Rejoin",
+    Callback=function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end})
+
+MiscT:CreateButton({Name="Serveur le moins peuplé",
+    Callback=function()
+        local ok,pages=pcall(function() return Players:GetServerList(game.PlaceId) end)
+        if ok and pages then
+            local list=pages:GetCurrentPage()
+            table.sort(list,function(a,b) return a.Playing<b.Playing end)
+            if #list>0 then TeleportService:TeleportToPlaceInstance(game.PlaceId,list[1].Id,LocalPlayer) end
+        else Notif("Erreur","Impossible de récupérer.",3) end
+    end})
+
+MiscT:CreateSection("Outils")
+
+MiscT:CreateButton({Name="Lister joueurs (F9)",
+    Callback=function()
+        for _,p in ipairs(Players:GetPlayers()) do
+            local h=GetHum(p); local r=GetHRP(p)
+            if h and r and HumanoidRP then
+                print(("[BAADIES] %s | HP:%.0f/%.0f | %.0fm | Team:%s"):format(
+                    p.Name, h.Health, h.MaxHealth,
+                    (HumanoidRP.Position-r.Position).Magnitude,
+                    tostring(p.Team and p.Team.Name or "none")))
+            end
+        end
+        Notif("Spy","Affiché dans la console (F9)",2)
+    end})
+
+MiscT:CreateButton({Name="Copier Position",
+    Callback=function()
+        if HumanoidRP then local p=HumanoidRP.Position
+            pcall(function() setclipboard(("%.1f, %.1f, %.1f"):format(p.X,p.Y,p.Z)) end)
+            Notif("Copié","Position dans le presse-papier!",2)
+        end
+    end})
+
+-- ═══════════════════ 💾 CONFIG ═══════════════════
+
+local ConfT = Window:CreateTab("💾 Config", 4483362458)
+
+ConfT:CreateSection("Sauvegarde")
+
+ConfT:CreateButton({Name="💾 Sauvegarder",
+    Callback=function() Rayfield:SaveConfiguration(); Notif("Config","Sauvegardée ✅",3) end})
+
+ConfT:CreateButton({Name="📂 Charger",
+    Callback=function() Rayfield:LoadConfiguration(); Notif("Config","Chargée ✅",3) end})
+
+ConfT:CreateSection("Keybinds (clavier uniquement)")
+
+ConfT:CreateKeybind({Name="Toggle Hub",         CurrentKeybind="RightShift", HoldToInteract=false, Flag="HubKB",
+    Callback=function() Rayfield:Toggle() end})
+ConfT:CreateKeybind({Name="Toggle ESP",         CurrentKeybind="F2",         HoldToInteract=false, Flag="ESPKB",
+    Callback=function() S.ESP=not S.ESP; Notif("ESP",S.ESP and "ON ✅" or "OFF ❌",1) end})
+ConfT:CreateKeybind({Name="Toggle Aimbot",      CurrentKeybind="F3",         HoldToInteract=false, Flag="AimKB",
+    Callback=function() S.Aimbot=not S.Aimbot; Notif("Aimbot",S.Aimbot and "ON ✅" or "OFF ❌",1) end})
+ConfT:CreateKeybind({Name="Toggle Triggerbot",  CurrentKeybind="F4",         HoldToInteract=false, Flag="TrigKB",
+    Callback=function() S.TriggerBot=not S.TriggerBot; Notif("Triggerbot",S.TriggerBot and "ON ✅" or "OFF ❌",1) end})
+
+-- ══════════════════════════════════════════════════════════
+--  INIT
+-- ══════════════════════════════════════════════════════════
+
+Rayfield:LoadConfiguration()
+Notif("Baadies Hub ✅", "by Limoon's  •  v5.0 Mobile 📱", 5)
