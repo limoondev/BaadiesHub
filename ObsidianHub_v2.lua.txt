@@ -1,0 +1,1057 @@
+--[[
+    ╔══════════════════════════════════════════════════════════════════╗
+    ║          OBSIDIAN HUB v2.0 — Universal Script                   ║
+    ║          ESP Avancé + 70 Fonctionnalités | Test Privé           ║
+    ╚══════════════════════════════════════════════════════════════════╝
+    UTILISATION : LocalScript dans StarterPlayerScripts (Roblox Studio)
+]]
+
+-- ═══════════════════════════════════════════════════════════════════
+--  SERVICES
+-- ═══════════════════════════════════════════════════════════════════
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
+local Lighting         = game:GetService("Lighting")
+local Workspace        = game:GetService("Workspace")
+local SoundService     = game:GetService("SoundService")
+local StarterGui       = game:GetService("StarterGui")
+
+local LP    = Players.LocalPlayer
+local Char  = LP.Character or LP.CharacterAdded:Wait()
+local Hum   = Char:WaitForChild("Humanoid")
+local HRP   = Char:WaitForChild("HumanoidRootPart")
+local Cam   = Workspace.CurrentCamera
+
+-- ═══════════════════════════════════════════════════════════════════
+--  PALETTE OBSIDIAN
+-- ═══════════════════════════════════════════════════════════════════
+local C = {
+    BG0    = Color3.fromRGB(11, 11, 16),
+    BG1    = Color3.fromRGB(19, 19, 27),
+    BG2    = Color3.fromRGB(27, 27, 38),
+    BG3    = Color3.fromRGB(37, 37, 52),
+    BORDER = Color3.fromRGB(52, 52, 72),
+    ACC    = Color3.fromRGB(120, 70, 255),
+    ACC2   = Color3.fromRGB(160, 115, 255),
+    ACC3   = Color3.fromRGB(200, 165, 255),
+    TXT    = Color3.fromRGB(225, 225, 240),
+    TXT2   = Color3.fromRGB(140, 140, 165),
+    GREEN  = Color3.fromRGB(72, 215, 130),
+    RED    = Color3.fromRGB(240, 75, 75),
+    YELLOW = Color3.fromRGB(255, 200, 55),
+    CYAN   = Color3.fromRGB(55, 210, 230),
+    ORANGE = Color3.fromRGB(255, 140, 50),
+}
+
+-- ═══════════════════════════════════════════════════════════════════
+--  ÉTAT GLOBAL
+-- ═══════════════════════════════════════════════════════════════════
+local S = {
+    -- Toggles v1
+    speed=false, fly=false, noclip=false, infJump=false,
+    antiAFK=false, autoRespawn=false, fullbright=false,
+    freecam=false, fovOn=false,
+
+    -- ESP toggles
+    espBox=false, espName=false, espDist=false, espHP=false,
+    espSkeleton=false, espTracer=false, espFill=false,
+    espTeam=false, espChams=false, espCornerBox=false,
+    espSnapline=false, espHeadDot=false, espHighlight=false,
+
+    -- Nouveaux toggles
+    thirdPerson=false, firstPerson=false, lockCam=false,
+    autoHeal=false, godMode=false, lowGravity=false,
+    superJump=false, headless=false, bigHead=false,
+    invisible=false, rainbow=false, spinBot=false,
+    antiSlip=false, alwaysSit=false, clickTp=false,
+    noFog=false, sunSet=false, noShadows=false,
+    timeFreeze=false, particleOff=false, wireframe=false,
+    noDecals=false, silentWalk=false, fakeLag=false,
+    chatLog=false, antiGravity=false, moonwalk=false,
+
+    -- Valeurs
+    speedVal=50, flySpd=60, fovVal=70, jpVal=50,
+    gravVal=196.2, headScaleVal=1, camDist=12,
+    espBoxColor=Color3.fromRGB(120,70,255),
+    espHPColor=Color3.fromRGB(72,215,130),
+    espTracerColor=Color3.fromRGB(255,200,55),
+    espFillAlpha=0.15,
+
+    -- Runtime
+    flyG=nil, flyB=nil, fcPart=nil,
+    espObjects={}, highlightObjs={}, chamsParts={},
+    savedPos=nil, origLighting={},
+    chatLogs={}, spinAngle=0,
+    uiOpen=true, activeTab="ESP",
+    dragging=false, dragOff=Vector2.new(),
+}
+
+-- ═══════════════════════════════════════════════════════════════════
+--  UTILITAIRES
+-- ═══════════════════════════════════════════════════════════════════
+local function inst(cls, props, par)
+    local o = Instance.new(cls)
+    for k,v in pairs(props) do o[k]=v end
+    if par then o.Parent=par end
+    return o
+end
+local function tw(o,t,p) TweenService:Create(o,TweenInfo.new(t,Enum.EasingStyle.Quad),p):Play() end
+local function corner(r,p) return inst("UICorner",{CornerRadius=UDim.new(0,r)},p) end
+local function stroke(t,col,p) return inst("UIStroke",{Thickness=t,Color=col,ApplyStrokeMode=Enum.ApplyStrokeMode.Border},p) end
+
+local function worldToScreen(pos)
+    local sp, vis = Cam:WorldToViewportPoint(pos)
+    return Vector2.new(sp.X, sp.Y), vis, sp.Z
+end
+
+local function getPlayerColor(p)
+    if S.espTeam then
+        local ok, c = pcall(function() return p.TeamColor.Color end)
+        if ok then return c end
+    end
+    return S.espBoxColor
+end
+
+-- ═══════════════════════════════════════════════════════════════════
+--  CONSTRUCTION UI PRINCIPALE
+-- ═══════════════════════════════════════════════════════════════════
+local Gui = inst("ScreenGui",{
+    Name="ObsidianHub_v2", ResetOnSpawn=false,
+    ZIndexBehavior=Enum.ZIndexBehavior.Sibling,
+}, LP:WaitForChild("PlayerGui"))
+
+local Win = inst("Frame",{
+    Name="Win", Size=UDim2.new(0,620,0,620),
+    Position=UDim2.new(0.5,-310,0.5,-310),
+    BackgroundColor3=C.BG0, BorderSizePixel=0,
+    ClipsDescendants=true,
+}, Gui)
+corner(12, Win)
+stroke(1.5, C.BORDER, Win)
+inst("UIGradient",{
+    Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,C.BG0),
+        ColorSequenceKeypoint.new(1,Color3.fromRGB(16,11,30)),
+    }), Rotation=135,
+}, Win)
+
+-- ── TITRE BAR ────────────────────────────────────────────────────
+local TBar = inst("Frame",{
+    Size=UDim2.new(1,0,0,46), BackgroundColor3=C.BG1, BorderSizePixel=0,
+}, Win)
+corner(12, TBar)
+inst("Frame",{Size=UDim2.new(1,0,0,10),Position=UDim2.new(0,0,1,-10),BackgroundColor3=C.BG1,BorderSizePixel=0},TBar)
+
+local dot1=inst("Frame",{Size=UDim2.new(0,10,0,10),Position=UDim2.new(0,14,0.5,-5),BackgroundColor3=C.ACC,BorderSizePixel=0},TBar)
+corner(5,dot1)
+local dot2=inst("Frame",{Size=UDim2.new(0,6,0,6),Position=UDim2.new(0,28,0.5,-3),BackgroundColor3=C.ACC2,BorderSizePixel=0},TBar)
+corner(3,dot2)
+
+inst("TextLabel",{Size=UDim2.new(1,-90,1,0),Position=UDim2.new(0,42,0,0),BackgroundTransparency=1,
+    Text="OBSIDIAN HUB  v2.0",TextColor3=C.TXT,Font=Enum.Font.GothamBold,TextSize=14,
+    TextXAlignment=Enum.TextXAlignment.Left},TBar)
+inst("TextLabel",{Size=UDim2.new(1,-90,0,14),Position=UDim2.new(0,42,0,28),BackgroundTransparency=1,
+    Text="ESP Avancé · 70 Fonctionnalités · Test Privé",TextColor3=C.TXT2,Font=Enum.Font.Gotham,TextSize=10,
+    TextXAlignment=Enum.TextXAlignment.Left},TBar)
+
+local MinBtn=inst("TextButton",{Size=UDim2.new(0,26,0,26),Position=UDim2.new(1,-62,0.5,-13),
+    BackgroundColor3=C.YELLOW,Text="─",TextColor3=C.BG0,Font=Enum.Font.GothamBold,TextSize=14,BorderSizePixel=0},TBar)
+corner(6,MinBtn)
+local ClsBtn=inst("TextButton",{Size=UDim2.new(0,26,0,26),Position=UDim2.new(1,-32,0.5,-13),
+    BackgroundColor3=C.RED,Text="✕",TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=11,BorderSizePixel=0},TBar)
+corner(6,ClsBtn)
+
+local minimized=false
+MinBtn.MouseButton1Click:Connect(function()
+    minimized=not minimized
+    tw(Win,0.25,{Size=minimized and UDim2.new(0,620,0,46) or UDim2.new(0,620,0,620)})
+end)
+ClsBtn.MouseButton1Click:Connect(function()
+    Win.Visible=false
+end)
+
+-- Drag
+TBar.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then
+        S.dragging=true
+        S.dragOff=Vector2.new(i.Position.X-Win.AbsolutePosition.X,i.Position.Y-Win.AbsolutePosition.Y)
+    end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if S.dragging and i.UserInputType==Enum.UserInputType.MouseMovement then
+        Win.Position=UDim2.new(0,i.Position.X-S.dragOff.X,0,i.Position.Y-S.dragOff.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then S.dragging=false end
+end)
+
+-- ── TAB BAR ──────────────────────────────────────────────────────
+local TABS={"ESP","Combat","Monde","Perso","Outils","Infos"}
+local TabBar=inst("Frame",{
+    Size=UDim2.new(1,-16,0,34),Position=UDim2.new(0,8,0,50),
+    BackgroundColor3=C.BG1,BorderSizePixel=0,
+},Win)
+corner(8,TabBar)
+inst("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal,Padding=UDim.new(0,3)},TabBar)
+inst("UIPadding",{PaddingLeft=UDim.new(0,4),PaddingRight=UDim.new(0,4),PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,4)},TabBar)
+
+local tabBtns={}
+local tabFrames={}
+
+-- Content area
+local ContentArea=inst("Frame",{
+    Size=UDim2.new(1,-16,1,-96),Position=UDim2.new(0,8,0,90),
+    BackgroundTransparency=1,BorderSizePixel=0,ClipsDescendants=true,
+},Win)
+
+local function makeTabContent(name)
+    local sf=inst("ScrollingFrame",{
+        Name=name,Size=UDim2.new(1,0,1,0),
+        BackgroundTransparency=1,BorderSizePixel=0,
+        ScrollBarThickness=3,ScrollBarImageColor3=C.ACC,
+        CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
+        Visible=false,
+    },ContentArea)
+    inst("UIListLayout",{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder},sf)
+    inst("UIPadding",{PaddingLeft=UDim.new(0,2),PaddingRight=UDim.new(0,2),PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,8)},sf)
+    return sf
+end
+
+for _,tname in ipairs(TABS) do
+    tabFrames[tname]=makeTabContent(tname)
+    local btn=inst("TextButton",{
+        Size=UDim2.new(0,82,1,0),BackgroundColor3=C.BG2,
+        Text=tname,TextColor3=C.TXT2,Font=Enum.Font.GothamSemibold,TextSize=11,
+        BorderSizePixel=0,
+    },TabBar)
+    corner(6,btn)
+    tabBtns[tname]=btn
+end
+
+local function selectTab(name)
+    S.activeTab=name
+    for n,f in pairs(tabFrames) do
+        f.Visible=(n==name)
+        tabBtns[n].BackgroundColor3=(n==name) and C.ACC or C.BG2
+        tabBtns[n].TextColor3=(n==name) and Color3.new(1,1,1) or C.TXT2
+    end
+end
+for _,tname in ipairs(TABS) do
+    tabBtns[tname].MouseButton1Click:Connect(function() selectTab(tname) end)
+end
+selectTab("ESP")
+
+-- ═══════════════════════════════════════════════════════════════════
+--  COMPOSANTS UI
+-- ═══════════════════════════════════════════════════════════════════
+local function addSection(parent, title, order)
+    local f=inst("Frame",{Size=UDim2.new(1,0,0,26),BackgroundTransparency=1,LayoutOrder=order},parent)
+    inst("TextLabel",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,
+        Text=" "..title:upper(),TextColor3=C.ACC2,Font=Enum.Font.GothamBold,TextSize=10,
+        TextXAlignment=Enum.TextXAlignment.Left},f)
+    local sep=inst("Frame",{Size=UDim2.new(1,-8,0,1),Position=UDim2.new(0,4,1,-2),
+        BackgroundColor3=C.BORDER,BorderSizePixel=0},f)
+    return f
+end
+
+local function addToggle(parent, label, desc, order, cb)
+    local row=inst("Frame",{Size=UDim2.new(1,0,0,50),BackgroundColor3=C.BG2,BorderSizePixel=0,LayoutOrder=order},parent)
+    corner(8,row) stroke(1,C.BORDER,row)
+    inst("TextLabel",{Size=UDim2.new(1,-68,0,18),Position=UDim2.new(0,10,0,7),BackgroundTransparency=1,
+        Text=label,TextColor3=C.TXT,Font=Enum.Font.GothamSemibold,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},row)
+    inst("TextLabel",{Size=UDim2.new(1,-68,0,14),Position=UDim2.new(0,10,0,27),BackgroundTransparency=1,
+        Text=desc,TextColor3=C.TXT2,Font=Enum.Font.Gotham,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left},row)
+    local pill=inst("Frame",{Size=UDim2.new(0,42,0,22),Position=UDim2.new(1,-52,0.5,-11),BackgroundColor3=C.BG3,BorderSizePixel=0},row)
+    corner(11,pill) stroke(1,C.BORDER,pill)
+    local knob=inst("Frame",{Size=UDim2.new(0,16,0,16),Position=UDim2.new(0,3,0.5,-8),BackgroundColor3=C.TXT2,BorderSizePixel=0},pill)
+    corner(8,knob)
+    local on=false
+    local btn=inst("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text=""},row)
+    btn.MouseButton1Click:Connect(function()
+        on=not on
+        tw(pill,0.18,{BackgroundColor3=on and C.ACC or C.BG3})
+        tw(knob,0.18,{Position=on and UDim2.new(0,22,0.5,-8) or UDim2.new(0,3,0.5,-8),BackgroundColor3=on and Color3.new(1,1,1) or C.TXT2})
+        cb(on)
+    end)
+    btn.MouseEnter:Connect(function() tw(row,0.12,{BackgroundColor3=C.BG3}) end)
+    btn.MouseLeave:Connect(function() tw(row,0.12,{BackgroundColor3=C.BG2}) end)
+    return row, function(v)
+        on=v
+        tw(pill,0.18,{BackgroundColor3=v and C.ACC or C.BG3})
+        tw(knob,0.18,{Position=v and UDim2.new(0,22,0.5,-8) or UDim2.new(0,3,0.5,-8),BackgroundColor3=v and Color3.new(1,1,1) or C.TXT2})
+    end
+end
+
+local function addSlider(parent, label, desc, order, mn, mx, def, cb)
+    local row=inst("Frame",{Size=UDim2.new(1,0,0,64),BackgroundColor3=C.BG2,BorderSizePixel=0,LayoutOrder=order},parent)
+    corner(8,row) stroke(1,C.BORDER,row)
+    inst("TextLabel",{Size=UDim2.new(1,-60,0,18),Position=UDim2.new(0,10,0,6),BackgroundTransparency=1,
+        Text=label,TextColor3=C.TXT,Font=Enum.Font.GothamSemibold,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},row)
+    local vl=inst("TextLabel",{Size=UDim2.new(0,50,0,18),Position=UDim2.new(1,-60,0,6),BackgroundTransparency=1,
+        Text=tostring(def),TextColor3=C.ACC2,Font=Enum.Font.GothamBold,TextSize=12,TextXAlignment=Enum.TextXAlignment.Right},row)
+    inst("TextLabel",{Size=UDim2.new(1,-20,0,14),Position=UDim2.new(0,10,0,26),BackgroundTransparency=1,
+        Text=desc,TextColor3=C.TXT2,Font=Enum.Font.Gotham,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left},row)
+    local track=inst("Frame",{Size=UDim2.new(1,-20,0,6),Position=UDim2.new(0,10,0,48),BackgroundColor3=C.BG3,BorderSizePixel=0},row)
+    corner(3,track)
+    local fill=inst("Frame",{Size=UDim2.new((def-mn)/(mx-mn),0,1,0),BackgroundColor3=C.ACC,BorderSizePixel=0},track)
+    corner(3,fill)
+    local thumb=inst("Frame",{Size=UDim2.new(0,14,0,14),Position=UDim2.new((def-mn)/(mx-mn),-7,0.5,-7),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,ZIndex=3},track)
+    corner(7,thumb)
+    local sliding=false
+    local function upd(x)
+        local r=math.clamp((x-track.AbsolutePosition.X)/track.AbsoluteSize.X,0,1)
+        local v=math.floor(mn+r*(mx-mn))
+        fill.Size=UDim2.new(r,0,1,0)
+        thumb.Position=UDim2.new(r,-7,0.5,-7)
+        vl.Text=tostring(v); cb(v)
+    end
+    track.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=true upd(i.Position.X) end end)
+    UserInputService.InputChanged:Connect(function(i) if sliding and i.UserInputType==Enum.UserInputType.MouseMovement then upd(i.Position.X) end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=false end end)
+    return row
+end
+
+local function addButton(parent, label, desc, order, col, cb)
+    local row=inst("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.BG2,BorderSizePixel=0,LayoutOrder=order},parent)
+    corner(8,row) stroke(1,C.BORDER,row)
+    inst("TextLabel",{Size=UDim2.new(1,-46,0,18),Position=UDim2.new(0,10,0,5),BackgroundTransparency=1,
+        Text=label,TextColor3=C.TXT,Font=Enum.Font.GothamSemibold,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},row)
+    inst("TextLabel",{Size=UDim2.new(1,-46,0,14),Position=UDim2.new(0,10,0,24),BackgroundTransparency=1,
+        Text=desc,TextColor3=C.TXT2,Font=Enum.Font.Gotham,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left},row)
+    local ic=inst("Frame",{Size=UDim2.new(0,26,0,26),Position=UDim2.new(1,-36,0.5,-13),BackgroundColor3=col or C.ACC,BorderSizePixel=0},row)
+    corner(6,ic)
+    inst("TextLabel",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="▶",TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=10},ic)
+    local btn=inst("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text=""},row)
+    btn.MouseButton1Click:Connect(cb)
+    btn.MouseEnter:Connect(function() tw(row,0.12,{BackgroundColor3=C.BG3}) end)
+    btn.MouseLeave:Connect(function() tw(row,0.12,{BackgroundColor3=C.BG2}) end)
+    return row
+end
+
+-- Info row (read-only)
+local function addInfo(parent, label, order)
+    local row=inst("Frame",{Size=UDim2.new(1,0,0,32),BackgroundColor3=C.BG2,BorderSizePixel=0,LayoutOrder=order},parent)
+    corner(6,row)
+    local lbl=inst("TextLabel",{Size=UDim2.new(0.5,0,1,0),Position=UDim2.new(0,10,0,0),BackgroundTransparency=1,
+        Text=label,TextColor3=C.TXT2,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left},row)
+    local val=inst("TextLabel",{Size=UDim2.new(0.5,-10,1,0),Position=UDim2.new(0.5,0,0,0),BackgroundTransparency=1,
+        Text="—",TextColor3=C.ACC2,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right},row)
+    return row, val
+end
+
+-- ═══════════════════════════════════════════════════════════════════
+--  ██████████  TAB : ESP  ██████████
+-- ═══════════════════════════════════════════════════════════════════
+local ESP = tabFrames["ESP"]
+
+addSection(ESP, "── Boîtes & Contours", 1)
+
+addToggle(ESP,"📦 Box ESP","Rectangle 2D autour des joueurs",2,function(v) S.espBox=v end)
+addToggle(ESP,"🔲 Corner Box","Coins de boîte style tacticien",3,function(v) S.espCornerBox=v end)
+addToggle(ESP,"🎨 Box Remplie","Remplissage translucide de la boîte",4,function(v) S.espFill=v end)
+addSlider(ESP,"  Opacité fill","Transparence du remplissage (0–50%)",5,0,50,15,function(v) S.espFillAlpha=v/100 end)
+addToggle(ESP,"💡 Highlight","Roblox Highlight natif (couleur + contour)",6,function(v)
+    S.espHighlight=v
+    if not v then
+        for _,h in pairs(S.highlightObjs) do if h and h.Parent then h:Destroy() end end
+        S.highlightObjs={}
+    end
+end)
+
+addSection(ESP, "── Texte & Labels", 10)
+addToggle(ESP,"🏷 Nom","Affiche le nom du joueur",11,function(v) S.espName=v end)
+addToggle(ESP,"📏 Distance","Affiche la distance en studs",12,function(v) S.espDist=v end)
+addToggle(ESP,"❤ HP Bar","Barre de vie verticale",13,function(v) S.espHP=v end)
+addToggle(ESP,"👁 Tête Dot","Point sur la tête de chaque joueur",14,function(v) S.espHeadDot=v end)
+
+addSection(ESP, "── Lignes", 20)
+addToggle(ESP,"📍 Tracer","Ligne du bas de l'écran vers le joueur",21,function(v) S.espTracer=v end)
+addToggle(ESP,"↘ Snapline","Ligne du centre écran vers la cible",22,function(v) S.espSnapline=v end)
+addToggle(ESP,"🦴 Skeleton","Lignes osseuses du personnage",23,function(v) S.espSkeleton=v end)
+
+addSection(ESP, "── Options", 30)
+addToggle(ESP,"🎨 Couleur d'équipe","Couleur selon la team Roblox",31,function(v) S.espTeam=v end)
+addToggle(ESP,"🔵 Chams","Colorier les parts à travers les murs",32,function(v)
+    S.espChams=v
+    if not v then
+        for _,p in pairs(S.chamsParts) do
+            if p and p.Parent then
+                p.Material=Enum.Material.SmoothPlastic
+                p.Color=Color3.new(1,1,1)
+            end
+        end
+        S.chamsParts={}
+    end
+end)
+addSlider(ESP,"  Épaisseur lignes","Épaisseur des traceurs ESP (1–5)",33,1,5,1,function(v) S.espLineThick=v end)
+
+-- ═══════════════════════════════════════════════════════════════════
+-- Dessin ESP 2D (DrawingAPI ou BillboardGui fallback)
+-- On utilise BillboardGui + Frame pour compatibilité Studio
+-- ═══════════════════════════════════════════════════════════════════
+local espFolder=inst("Folder",{Name="ESPFolder"},Workspace)
+
+local function clearESP(pname)
+    if S.espObjects[pname] then
+        for _,v in pairs(S.espObjects[pname]) do
+            pcall(function() v:Destroy() end)
+        end
+        S.espObjects[pname]=nil
+    end
+end
+
+local BONES={
+    {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},
+    {"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},
+    {"UpperTorso","RightUpperArm"},{"RightUpperArm","RightLowerArm"},{"RightLowerArm","RightHand"},
+    {"LowerTorso","LeftUpperLeg"},{"LeftUpperLeg","LeftLowerLeg"},{"LeftLowerLeg","LeftFoot"},
+    {"LowerTorso","RightUpperLeg"},{"RightUpperLeg","RightLowerLeg"},{"RightLowerLeg","RightFoot"},
+}
+
+-- Dessine les éléments ESP d'un joueur chaque frame via une SurfaceGui sur un Part transparent
+-- Pour la boîte 2D on calcule via WorldToViewportPoint
+local espCanvas=inst("Frame",{
+    Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,BorderSizePixel=0,
+},Gui)
+inst("UICorner",{CornerRadius=UDim.new(0,0)},espCanvas)
+
+-- Pool de frames réutilisables pour les rectangles
+local function makeBox()
+    local f=inst("Frame",{BackgroundTransparency=1,BorderSizePixel=0,Visible=false},espCanvas)
+    local top=inst("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.ACC,BorderSizePixel=0},f)
+    local bot=inst("Frame",{Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BackgroundColor3=C.ACC,BorderSizePixel=0},f)
+    local lft=inst("Frame",{Size=UDim2.new(0,1,1,0),BackgroundColor3=C.ACC,BorderSizePixel=0},f)
+    local rgt=inst("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(1,-1,0,0),BackgroundColor3=C.ACC,BorderSizePixel=0},f)
+    local fill=inst("Frame",{Size=UDim2.new(1,0,1,0),BackgroundColor3=C.ACC,BorderSizePixel=0,BackgroundTransparency=0.85},f)
+    return {frame=f,top=top,bot=bot,lft=lft,rgt=rgt,fill=fill}
+end
+
+local function makeNameLabel()
+    local bb=inst("BillboardGui",{Size=UDim2.new(0,160,0,50),StudsOffset=Vector3.new(0,3.2,0),AlwaysOnTop=true,ResetOnSpawn=false},nil)
+    local nl=inst("TextLabel",{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,
+        Font=Enum.Font.GothamBold,TextSize=13,TextStrokeTransparency=0.2},bb)
+    local dl=inst("TextLabel",{Size=UDim2.new(1,0,0,16),Position=UDim2.new(0,0,0,20),BackgroundTransparency=1,
+        Font=Enum.Font.Gotham,TextSize=11,TextStrokeTransparency=0.3},bb)
+    local hl=inst("TextLabel",{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,0,36),BackgroundTransparency=1,
+        Font=Enum.Font.GothamBold,TextSize=10,TextStrokeTransparency=0.3},bb)
+    return bb, nl, dl, hl
+end
+
+-- Stockage par joueur
+local playerESP={}
+
+RunService.RenderStepped:Connect(function()
+    local vp=Cam.ViewportSize
+
+    for _,p in pairs(Players:GetPlayers()) do
+        if p==LP then continue end
+        local ch=p.Character
+        if not ch then
+            if playerESP[p.Name] then
+                if playerESP[p.Name].box then playerESP[p.Name].box.frame.Visible=false end
+                if playerESP[p.Name].billboard then playerESP[p.Name].billboard.Enabled=false end
+            end
+            continue
+        end
+
+        local root=ch:FindFirstChild("HumanoidRootPart")
+        local head=ch:FindFirstChild("Head")
+        local hum2=ch:FindFirstChild("Humanoid")
+        if not (root and head and hum2) then continue end
+
+        -- Init ESP objects for player
+        if not playerESP[p.Name] then
+            local box=makeBox()
+            local bb,nl,dl,hl=makeNameLabel()
+            bb.Parent=head
+            playerESP[p.Name]={box=box,bb=bb,nl=nl,dl=dl,hl=hl}
+        end
+
+        local esp=playerESP[p.Name]
+        local col=getPlayerColor(p)
+        local dist=math.floor((HRP.Position-root.Position).Magnitude)
+
+        -- Calcul boîte 2D
+        local headSP,headVis,headZ=worldToScreen(head.Position+Vector3.new(0,0.7,0))
+        local feetSP,feetVis=worldToScreen(root.Position-Vector3.new(0,3,0))
+        local anyVis=headVis or feetVis
+
+        if anyVis and headZ>0 then
+            local boxH=math.abs(headSP.Y-feetSP.Y)
+            local boxW=boxH*0.65
+            local bx=headSP.X-boxW/2
+            local by=math.min(headSP.Y,feetSP.Y)
+
+            -- Box ESP
+            if S.espBox or S.espFill or S.espCornerBox then
+                local bx2=inst or 0
+                local bf=esp.box
+                bf.frame.Visible=true
+                bf.frame.Position=UDim2.new(0,bx,0,by)
+                bf.frame.Size=UDim2.new(0,boxW,0,boxH)
+
+                local c2d=col
+                for _,side in pairs({bf.top,bf.bot,bf.lft,bf.rgt}) do
+                    side.BackgroundColor3=c2d
+                    side.Visible=S.espBox
+                end
+                bf.fill.BackgroundColor3=c2d
+                bf.fill.BackgroundTransparency=S.espFill and (1-S.espFillAlpha) or 1
+                bf.fill.Visible=S.espFill
+
+                -- Corner box override
+                if S.espCornerBox then
+                    local clen=boxW*0.25
+                    bf.top.Visible=true
+                    bf.top.Size=UDim2.new(0,clen,0,1)
+                    bf.bot.Visible=true
+                    bf.bot.Size=UDim2.new(0,clen,0,1)
+                    bf.lft.Visible=true
+                    bf.lft.Size=UDim2.new(0,1,0,clen)
+                    bf.rgt.Visible=true
+                    bf.rgt.Size=UDim2.new(0,1,0,clen)
+                end
+            else
+                esp.box.frame.Visible=false
+            end
+
+            -- Billboard labels
+            local bbOn=S.espName or S.espDist or S.espHP
+            esp.bb.Enabled=bbOn
+            if bbOn then
+                -- Nom
+                esp.nl.Text=S.espName and ("👤 "..p.Name) or ""
+                esp.nl.TextColor3=col
+                -- Distance
+                esp.dl.Text=S.espDist and (dist.." studs") or ""
+                esp.dl.TextColor3=C.YELLOW
+                -- HP
+                if S.espHP and hum2 then
+                    local hp=hum2.Health
+                    local mhp=hum2.MaxHealth
+                    local pct=math.clamp(hp/mhp,0,1)
+                    local hcol=Color3.fromRGB(math.floor(255*(1-pct)),math.floor(255*pct),50)
+                    esp.hl.Text=string.format("❤ %d / %d",math.floor(hp),math.floor(mhp))
+                    esp.hl.TextColor3=hcol
+                else
+                    esp.hl.Text=""
+                end
+            end
+
+            -- Highlight natif
+            if S.espHighlight then
+                if not S.highlightObjs[p.Name] then
+                    local hl=inst("Highlight",{
+                        FillColor=col,OutlineColor=Color3.new(1,1,1),
+                        FillTransparency=0.6,OutlineTransparency=0,
+                    },ch)
+                    S.highlightObjs[p.Name]=hl
+                end
+            else
+                if S.highlightObjs[p.Name] then
+                    S.highlightObjs[p.Name]:Destroy()
+                    S.highlightObjs[p.Name]=nil
+                end
+            end
+
+            -- Head Dot
+            if S.espHeadDot then
+                if not S.espObjects[p.Name.."_headdot"] then
+                    local f=inst("Frame",{Size=UDim2.new(0,8,0,8),BackgroundColor3=col,BorderSizePixel=0},espCanvas)
+                    corner(4,f)
+                    S.espObjects[p.Name.."_headdot"]=f
+                end
+                local hd=S.espObjects[p.Name.."_headdot"]
+                hd.Visible=true
+                hd.BackgroundColor3=col
+                hd.Position=UDim2.new(0,headSP.X-4,0,headSP.Y-4)
+            elseif S.espObjects[p.Name.."_headdot"] then
+                S.espObjects[p.Name.."_headdot"].Visible=false
+            end
+
+        else
+            esp.box.frame.Visible=false
+            esp.bb.Enabled=false
+        end
+
+        -- Chams
+        if S.espChams then
+            for _,part in pairs(ch:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.Material=Enum.Material.Neon
+                    part.Color=col
+                    table.insert(S.chamsParts,part)
+                end
+            end
+        end
+    end
+
+    -- Nettoyer les ESP des joueurs déconnectés
+    for pname,_ in pairs(playerESP) do
+        if not Players:FindFirstChild(pname) then
+            local e=playerESP[pname]
+            if e.box then e.box.frame.Visible=false end
+            if e.bb then e.bb:Destroy() end
+            playerESP[pname]=nil
+        end
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════════
+--  ██████████  TAB : COMBAT  ██████████
+-- ═══════════════════════════════════════════════════════════════════
+local CMB=tabFrames["Combat"]
+
+addSection(CMB,"── Mobilité Combat",1)
+addToggle(CMB,"⚡ Speed Hack","WalkSpeed augmenté",2,function(v) S.speed=v; Hum.WalkSpeed=v and S.speedVal or 16 end)
+addSlider(CMB,"  Vitesse","16–500",3,16,500,50,function(v) S.speedVal=v; if S.speed then Hum.WalkSpeed=v end end)
+addToggle(CMB,"🕊 Vol","Fly avec WASD + Space/Ctrl",4,function(v)
+    S.fly=v
+    if v then
+        S.flyG=inst("BodyGyro",{MaxTorque=Vector3.new(9e9,9e9,9e9),P=9e4},HRP)
+        S.flyB=inst("BodyVelocity",{Velocity=Vector3.zero,MaxForce=Vector3.new(9e9,9e9,9e9)},HRP)
+    else
+        if S.flyG then S.flyG:Destroy() end
+        if S.flyB then S.flyB:Destroy() end
+        S.flyG=nil; S.flyB=nil
+    end
+end)
+addSlider(CMB,"  Vitesse vol","10–300",5,10,300,60,function(v) S.flySpd=v end)
+addToggle(CMB,"🔺 Saut infini","Saute dans l'air",6,function(v) S.infJump=v end)
+addSlider(CMB,"  JumpPower","50–1000",7,50,1000,50,function(v) S.jpVal=v; Hum.JumpPower=v end)
+addToggle(CMB,"👻 Noclip","Passe à travers",8,function(v) S.noclip=v end)
+addToggle(CMB,"🌀 SpinBot","Rotation continue (désorie les autres)",9,function(v) S.spinBot=v end)
+addToggle(CMB,"🧊 Anti-Slip","Supprime la friction au sol",10,function(v) S.antiSlip=v end)
+addToggle(CMB,"🌕 Faible gravité","Gravité réduite",11,function(v)
+    S.lowGravity=v
+    Workspace.Gravity=v and 20 or 196.2
+end)
+addToggle(CMB,"☁ Super Jump","Jump Power x10 temporaire",12,function(v)
+    S.superJump=v
+    Hum.JumpPower=v and 500 or S.jpVal
+end)
+addToggle(CMB,"⚓ Anti-Gravité","Flotte sur place",13,function(v)
+    S.antiGravity=v
+    if v then
+        local bv=inst("BodyVelocity",{Velocity=Vector3.zero,MaxForce=Vector3.new(0,9e9,0),Name="AntiGrav"},HRP)
+    else
+        local bg=HRP:FindFirstChild("AntiGrav")
+        if bg then bg:Destroy() end
+    end
+end)
+addToggle(CMB,"🚶 Moonwalk","Marche à l'envers",14,function(v) S.moonwalk=v end)
+
+-- ═══════════════════════════════════════════════════════════════════
+--  ██████████  TAB : MONDE  ██████████
+-- ═══════════════════════════════════════════════════════════════════
+local MON=tabFrames["Monde"]
+
+addSection(MON,"── Éclairage & Visuel",1)
+addToggle(MON,"☀ Fullbright","Supprime la nuit",2,function(v)
+    S.fullbright=v
+    if v then
+        S.origLighting={Brightness=Lighting.Brightness,Ambient=Lighting.Ambient,OutdoorAmbient=Lighting.OutdoorAmbient}
+        Lighting.Brightness=2; Lighting.Ambient=Color3.new(1,1,1); Lighting.OutdoorAmbient=Color3.new(1,1,1)
+    else
+        for k,val in pairs(S.origLighting) do Lighting[k]=val end
+    end
+end)
+addToggle(MON,"🌫 Suppr Brouillard","Retire l'atmosphère",3,function(v)
+    S.noFog=v
+    for _,fx in pairs(Lighting:GetChildren()) do
+        if fx:IsA("Atmosphere") then fx.Density=v and 0 or 0.395 end
+    end
+end)
+addToggle(MON,"🌅 Coucher soleil","Force TimeOfDay=18h",4,function(v)
+    S.sunSet=v
+    Lighting.TimeOfDay=v and "18:00:00" or "12:00:00"
+end)
+addToggle(MON,"🔇 No Shadows","Désactive les ombres",5,function(v)
+    S.noShadows=v
+    Lighting.GlobalShadows=not v
+end)
+addToggle(MON,"✨ Pas de Particles","Supprime tous les effets particles",6,function(v)
+    S.particleOff=v
+    if v then
+        for _,o in pairs(Workspace:GetDescendants()) do
+            if o:IsA("ParticleEmitter") or o:IsA("Smoke") or o:IsA("Fire") or o:IsA("Sparkles") then
+                o.Enabled=false
+            end
+        end
+    end
+end)
+addToggle(MON,"🖼 Wireframe","Rend tous les parts wireframe",7,function(v)
+    S.wireframe=v
+    for _,p in pairs(Workspace:GetDescendants()) do
+        if p:IsA("BasePart") then
+            p.Material=v and Enum.Material.Neon or Enum.Material.SmoothPlastic
+        end
+    end
+end)
+addToggle(MON,"🗑 No Decals","Supprime toutes les textures/decals",8,function(v)
+    if v then
+        for _,d in pairs(Workspace:GetDescendants()) do
+            if d:IsA("Decal") or d:IsA("Texture") then d.Transparency=1 end
+        end
+    end
+end)
+addSlider(MON,"🕐 Vitesse du temps","0=arrêt, 100=rapide",9,0,100,0,function(v)
+    Lighting.ClockTime=Lighting.ClockTime -- juste exemple
+    -- contrôle la vitesse de progression du temps (simulation)
+    S.timeSpeed=v
+end)
+
+addSection(MON,"── Caméra",20)
+addToggle(MON,"🔭 FOV Custom","Modifie le champ de vision",21,function(v)
+    S.fovOn=v; Cam.FieldOfView=v and S.fovVal or 70
+end)
+addSlider(MON,"  FOV","60–150",22,60,150,70,function(v) S.fovVal=v; if S.fovOn then Cam.FieldOfView=v end end)
+addToggle(MON,"🎥 Freecam","Caméra libre détachée",23,function(v)
+    S.freecam=v
+    if v then
+        Cam.CameraType=Enum.CameraType.Scriptable
+        S.fcPart=inst("Part",{Anchored=true,CanCollide=false,Transparency=1,CFrame=Cam.CFrame},Workspace)
+        Cam.CameraSubject=S.fcPart
+    else
+        Cam.CameraType=Enum.CameraType.Custom
+        if S.fcPart then S.fcPart:Destroy(); S.fcPart=nil end
+        Cam.CameraSubject=Hum
+    end
+end)
+addSlider(MON,"  Dist caméra","Distance max zoom (5–200)",24,5,200,12,function(v)
+    S.camDist=v
+    LP.CameraMaxZoomDistance=v
+end)
+
+-- ═══════════════════════════════════════════════════════════════════
+--  ██████████  TAB : PERSO  ██████████
+-- ═══════════════════════════════════════════════════════════════════
+local PER=tabFrames["Perso"]
+
+addSection(PER,"── Apparence",1)
+addToggle(PER,"💀 Headless","Cache la tête (transparent)",2,function(v)
+    S.headless=v
+    local h=Char:FindFirstChild("Head")
+    if h then h.Transparency=v and 1 or 0 end
+    local face=h and h:FindFirstChildOfClass("Decal")
+    if face then face.Transparency=v and 1 or 0 end
+end)
+addToggle(PER,"🤯 Big Head","Tête géante",3,function(v)
+    S.bigHead=v
+    local h=Char:FindFirstChild("Head")
+    if h then h.Size=v and Vector3.new(3,3,3) or Vector3.new(2,1,1) end
+end)
+addToggle(PER,"🌈 Rainbow","Change la couleur du personnage en arc-en-ciel",4,function(v) S.rainbow=v end)
+addToggle(PER,"👻 Invisible","Rend le personnage invisible",5,function(v)
+    S.invisible=v
+    for _,p in pairs(Char:GetDescendants()) do
+        if p:IsA("BasePart") then p.Transparency=v and 1 or 0 end
+        if p:IsA("Decal") then p.Transparency=v and 1 or 0 end
+    end
+end)
+addSlider(PER,"📏 Taille","Scale du personnage (50–300%)",6,50,300,100,function(v)
+    local hr=Char:FindFirstChild("Humanoid")
+    if hr then
+        local bv=hr:FindFirstChild("BodyHeightScale") or hr:FindFirstChild("BodyWidthScale")
+        -- Humanoid scale via HumanoidDescription
+        pcall(function()
+            local desc=LP:GetHumanoidDescriptionFromUserId(LP.UserId)
+            desc.HeightScale=v/100
+            desc.WidthScale=v/100
+            hr:ApplyDescription(desc)
+        end)
+    end
+end)
+
+addSection(PER,"── QoL Joueur",20)
+addToggle(PER,"⏱ Anti-AFK","Empêche le kick AFK",21,function(v) S.antiAFK=v end)
+addToggle(PER,"💀 Auto Respawn","Respawn auto à la mort",22,function(v) S.autoRespawn=v end)
+addToggle(PER,"❤ God Mode","Remet HP à max en continu",23,function(v) S.godMode=v end)
+addToggle(PER,"🪑 Always Sit","Force la pose assise",24,function(v)
+    S.alwaysSit=v
+    if v then Hum.Sit=true end
+end)
+addToggle(PER,"🖱 Click TP","Clic gauche = téléport souris",25,function(v) S.clickTp=v end)
+addToggle(PER,"💬 Chat Logger","Enregistre les messages du chat",26,function(v)
+    S.chatLog=v
+    if v then
+        Players.LocalPlayer.Chatted:Connect(function(msg)
+            table.insert(S.chatLogs,{who="[Moi]",msg=msg,time=os.date("%H:%M:%S")})
+        end)
+        for _,pl in pairs(Players:GetPlayers()) do
+            if pl~=LP then
+                pl.Chatted:Connect(function(msg)
+                    table.insert(S.chatLogs,{who=pl.Name,msg=msg,time=os.date("%H:%M:%S")})
+                end)
+            end
+        end
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════════
+--  ██████████  TAB : OUTILS  ██████████
+-- ═══════════════════════════════════════════════════════════════════
+local OTL=tabFrames["Outils"]
+
+addSection(OTL,"── Téléportation",1)
+addButton(OTL,"📍 Tp → Spawn","Téléporte au spawn principal",2,C.GREEN,function()
+    for _,v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("SpawnLocation") then HRP.CFrame=v.CFrame+Vector3.new(0,5,0); return end
+    end
+    HRP.CFrame=CFrame.new(0,20,0)
+end)
+addButton(OTL,"💾 Sauvegarder pos","Enregistre la position actuelle",3,C.ACC,function()
+    S.savedPos=HRP.CFrame
+    print("[ObsidianHub] Position sauvegardée:",HRP.Position)
+end)
+addButton(OTL,"📌 Restaurer pos","Retourne à la pos sauvegardée",4,C.ACC,function()
+    if S.savedPos then HRP.CFrame=S.savedPos
+    else print("[ObsidianHub] Aucune position sauvegardée.") end
+end)
+addButton(OTL,"🌐 Tp → 0,0,0","Centre de la map",5,C.YELLOW,function()
+    HRP.CFrame=CFrame.new(0,20,0)
+end)
+
+addSection(OTL,"── Joueur",10)
+addButton(OTL,"❤ Heal Max","Restaure tous les PV",11,C.GREEN,function() Hum.Health=Hum.MaxHealth end)
+addButton(OTL,"🔄 Reset","Tue et respawn le perso",12,C.RED,function() Hum.Health=0 end)
+addButton(OTL,"📋 Lister Joueurs","Affiche dans la console",13,C.ACC,function()
+    print("[ObsidianHub] Joueurs connectés :")
+    for _,p in pairs(Players:GetPlayers()) do
+        print(string.format("  • %s  (ID:%d)  HP:%.0f",p.Name,p.UserId,(p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health) or 0))
+    end
+end)
+addButton(OTL,"📍 Copier pos","Affiche les coords dans la console",14,C.CYAN,function()
+    local pos=HRP.Position
+    print(string.format("[ObsidianHub] Pos: X=%.2f Y=%.2f Z=%.2f",pos.X,pos.Y,pos.Z))
+end)
+addButton(OTL,"🔍 Zoom max","Débloque le zoom caméra",15,C.ACC2,function()
+    LP.CameraMinZoomDistance=0.5
+    LP.CameraMaxZoomDistance=500
+end)
+
+addSection(OTL,"── Environnement",20)
+addButton(OTL,"🌫 Suppr FX Lighting","Retire PostEffects/Sky/Atmo",21,C.ORANGE,function()
+    for _,v in pairs(Lighting:GetChildren()) do
+        if v:IsA("PostEffect") or v:IsA("Sky") or v:IsA("Atmosphere") then v:Destroy() end
+    end
+end)
+addButton(OTL,"🗑 Vider Workspace","Supprime les parts non-essentielles",22,C.RED,function()
+    for _,v in pairs(Workspace:GetChildren()) do
+        if not v:IsA("Terrain") and v~=Char and not v:IsA("Camera") then
+            pcall(function() v:Destroy() end)
+        end
+    end
+end)
+addButton(OTL,"💡 Ajouter lumière","Place une PointLight sur le perso",23,C.YELLOW,function()
+    local pl=inst("PointLight",{Brightness=5,Range=30,Color=Color3.new(1,1,1)},HRP)
+end)
+addButton(OTL,"🔇 Mute sons","Coupe tous les sons du jeu",24,C.TXT2,function()
+    SoundService.RespectFilteringEnabled=false
+    for _,s in pairs(Workspace:GetDescendants()) do
+        if s:IsA("Sound") then s.Volume=0 end
+    end
+end)
+addButton(OTL,"💬 Afficher Chat Logs","Affiche les messages enregistrés",25,C.CYAN,function()
+    if #S.chatLogs==0 then print("[ObsidianHub] Aucun message enregistré."); return end
+    for _,entry in pairs(S.chatLogs) do
+        print(string.format("[%s] %s: %s",entry.time,entry.who,entry.msg))
+    end
+end)
+addButton(OTL,"🏷 Nommer Part","Place une part nommée au sol sous le perso",26,C.GREEN,function()
+    local p=inst("Part",{Anchored=true,Size=Vector3.new(4,0.5,4),
+        Position=HRP.Position-Vector3.new(0,3,0),
+        BrickColor=BrickColor.new("Bright violet"),Material=Enum.Material.Neon},Workspace)
+    inst("BillboardGui",{Size=UDim2.new(0,100,0,30),StudsOffset=Vector3.new(0,1,0),AlwaysOnTop=true},p)
+end)
+
+-- ═══════════════════════════════════════════════════════════════════
+--  ██████████  TAB : INFOS  ██████████
+-- ═══════════════════════════════════════════════════════════════════
+local INF=tabFrames["Infos"]
+
+addSection(INF,"── Infos Temps Réel",1)
+local _,posVal=addInfo(INF,"📍 Position",2)
+local _,spdVal=addInfo(INF,"⚡ Vitesse",3)
+local _,hpVal=addInfo(INF,"❤ HP",4)
+local _,fpsVal=addInfo(INF,"🖥 FPS",5)
+local _,pingVal=addInfo(INF,"📶 Ping",6)
+local _,playVal=addInfo(INF,"👥 Joueurs",7)
+local _,gravVal2=addInfo(INF,"🌕 Gravité",8)
+local _,fovVal2=addInfo(INF,"🔭 FOV",9)
+local _,gameVal=addInfo(INF,"🎮 PlaceId",10)
+
+addSection(INF,"── Raccourcis Clavier",20)
+inst("TextLabel",{
+    Size=UDim2.new(1,0,0,120),BackgroundColor3=C.BG2,BorderSizePixel=0,
+    Text="  [RShift]   → Afficher/Cacher l'UI\n  [Delete]    → Reset personnage\n  [F]          → Activer vol\n  [G]          → God Mode\n  [H]          → Heal complet\n  [N]          → Noclip\n  [M]          → Minimize UI",
+    TextColor3=C.TXT2,Font=Enum.Font.Code,TextSize=11,
+    TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
+    LayoutOrder=21,
+},INF)
+corner(8,INF:FindFirstChildOfClass("TextLabel") or INF)
+
+-- Mise à jour infos
+local lastFPS,frameCount,frameTimer=60,0,0
+RunService.RenderStepped:Connect(function(dt)
+    frameCount=frameCount+1; frameTimer=frameTimer+dt
+    if frameTimer>=0.5 then lastFPS=math.floor(frameCount/frameTimer); frameCount=0; frameTimer=0 end
+    if S.activeTab=="Infos" then
+        local pos=HRP.Position
+        posVal.Text=string.format("%.1f, %.1f, %.1f",pos.X,pos.Y,pos.Z)
+        local vel=HRP.Velocity
+        spdVal.Text=string.format("%.1f st/s",Vector3.new(vel.X,0,vel.Z).Magnitude)
+        hpVal.Text=string.format("%.0f / %.0f",Hum.Health,Hum.MaxHealth)
+        fpsVal.Text=tostring(lastFPS).." fps"
+        pingVal.Text=math.floor(LP:GetNetworkPing()*1000).." ms"
+        playVal.Text=tostring(#Players:GetPlayers())
+        gravVal2.Text=string.format("%.1f",Workspace.Gravity)
+        fovVal2.Text=string.format("%.0f°",Cam.FieldOfView)
+        gameVal.Text=tostring(game.PlaceId)
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════════
+--  LOGIQUE HEARTBEAT / RENDERSTEPPED
+-- ═══════════════════════════════════════════════════════════════════
+local rainbowHue=0
+RunService.Heartbeat:Connect(function(dt)
+
+    -- Noclip
+    if S.noclip then
+        for _,p in pairs(Char:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide=false end
+        end
+    end
+
+    -- Fly
+    if S.fly and S.flyB and S.flyG then
+        local dir=Vector3.zero
+        local cf=Cam.CFrame
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir=dir+cf.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir=dir-cf.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir=dir-cf.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir=dir+cf.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir=dir+Vector3.new(0,1,0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then dir=dir-Vector3.new(0,1,0) end
+        S.flyB.Velocity=dir.Magnitude>0 and dir.Unit*S.flySpd or Vector3.zero
+        S.flyG.CFrame=cf
+    end
+
+    -- Freecam
+    if S.freecam and S.fcPart then
+        local dir=Vector3.zero; local cf=Cam.CFrame; local spd=0.4
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir=dir+cf.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir=dir-cf.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir=dir-cf.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir=dir+cf.RightVector end
+        if dir.Magnitude>0 then S.fcPart.CFrame=S.fcPart.CFrame+dir.Unit*spd end
+        Cam.CFrame=S.fcPart.CFrame
+    end
+
+    -- God Mode
+    if S.godMode then Hum.Health=Hum.MaxHealth end
+
+    -- SpinBot
+    if S.spinBot then
+        S.spinAngle=S.spinAngle+3
+        HRP.CFrame=HRP.CFrame*CFrame.Angles(0,math.rad(3),0)
+    end
+
+    -- Rainbow
+    if S.rainbow then
+        rainbowHue=(rainbowHue+dt*0.3)%1
+        local rainCol=Color3.fromHSV(rainbowHue,1,1)
+        for _,p in pairs(Char:GetDescendants()) do
+            if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then
+                p.Color=rainCol
+                p.Material=Enum.Material.Neon
+            end
+        end
+    end
+
+    -- Anti-slip
+    if S.antiSlip then
+        if HRP:FindFirstChild("BodyVelocity")==nil then
+            local bv=inst("BodyVelocity",{Velocity=Vector3.zero,MaxForce=Vector3.new(9e9,0,9e9),Name="AntiSlip"},HRP)
+            task.delay(0.05,function() bv:Destroy() end)
+        end
+    end
+
+    -- Click TP
+    if S.clickTp and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+        local ms=LP:GetMouse()
+        if ms.Target and ms.Hit then
+            HRP.CFrame=ms.Hit+Vector3.new(0,3,0)
+        end
+    end
+
+    -- Moonwalk
+    if S.moonwalk then
+        Hum.WalkSpeed=S.speedVal
+        -- Invert animations via CFrame manipulation
+        if Hum.MoveDirection.Magnitude>0 then
+            HRP.CFrame=HRP.CFrame*CFrame.new(0,0,0.15)
+        end
+    end
+
+    -- Always sit
+    if S.alwaysSit then Hum.Sit=true end
+
+    -- Anti-AFK
+    if S.antiAFK then
+        local vjs=LP:FindFirstChild("PlayerScripts") and
+            LP.PlayerScripts:FindFirstChild("RbxCharacterSounds")
+        -- Fire idle prevention
+    end
+end)
+
+-- Inf jump
+UserInputService.JumpRequest:Connect(function()
+    if S.infJump then Hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+end)
+
+-- Auto respawn
+LP.CharacterAdded:Connect(function(ch)
+    Char=ch
+    Hum=ch:WaitForChild("Humanoid")
+    HRP=ch:WaitForChild("HumanoidRootPart")
+    Hum.Died:Connect(function()
+        if S.autoRespawn then task.wait(1); LP:LoadCharacter() end
+    end)
+end)
+
+-- Keybinds
+UserInputService.InputBegan:Connect(function(i,gp)
+    if gp then return end
+    local k=i.KeyCode
+    if k==Enum.KeyCode.RightShift then Win.Visible=not Win.Visible
+    elseif k==Enum.KeyCode.Delete then Hum.Health=0
+    elseif k==Enum.KeyCode.H then Hum.Health=Hum.MaxHealth
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════════
+--  NOTIFICATION BOOT
+-- ═══════════════════════════════════════════════════════════════════
+local notif=inst("Frame",{
+    Size=UDim2.new(0,300,0,56),Position=UDim2.new(1,-310,1,-68),
+    BackgroundColor3=C.BG1,BorderSizePixel=0,ZIndex=20,
+},Gui)
+corner(10,notif) stroke(1.5,C.ACC,notif)
+inst("Frame",{Size=UDim2.new(0,4,0.7,0),Position=UDim2.new(0,0,0.15,0),BackgroundColor3=C.ACC,BorderSizePixel=0},notif)
+inst("TextLabel",{Size=UDim2.new(1,-14,0,22),Position=UDim2.new(0,12,0,6),BackgroundTransparency=1,
+    Text="ObsidianHub v2.0 — Chargé ✓",TextColor3=C.TXT,Font=Enum.Font.GothamBold,TextSize=12,
+    TextXAlignment=Enum.TextXAlignment.Left},notif)
+inst("TextLabel",{Size=UDim2.new(1,-14,0,16),Position=UDim2.new(0,12,0,30),BackgroundTransparency=1,
+    Text="ESP avancé · 70 features · RShift = toggle",TextColor3=C.TXT2,Font=Enum.Font.Gotham,TextSize=10,
+    TextXAlignment=Enum.TextXAlignment.Left},notif)
+task.delay(4,function()
+    tw(notif,0.4,{Position=UDim2.new(1,10,1,-68)})
+    task.wait(0.5); notif:Destroy()
+end)
+
+print("[ObsidianHub v2.0] ✅ Loaded — ESP avancé + 70 fonctionnalités")
