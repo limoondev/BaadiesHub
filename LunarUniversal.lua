@@ -1,6 +1,6 @@
 --[[
-    Lunar Universal V5.0.0 (Titan Edition)
-    Powered by Starlight UI & Twilight ESP
+    Lunar Universal V6.0.0 (Titan Edition)
+    Powered by LinoriaLib & Twilight ESP
     Developed by Antigravity
     
     WARNING: This script is heavily obfuscated in memory, but this is the raw source.
@@ -34,13 +34,15 @@ local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
---// Load Libraries
-local Starlight = loadstring(game:HttpGet("https://raw.nebulasoftworks.xyz/starlight"))()
-local NebulaIcons = loadstring(game:HttpGet("https://raw.nebulasoftworks.xyz/nebula-icon-library-loader"))()
+--// Load Libraries (LinoriaLib & Twilight)
+local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
+local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
+local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
 local Twilight = loadstring(game:HttpGet("https://raw.nebulasoftworks.xyz/twilight"))()
 
 --// Initialization Check
-if not Starlight or not Twilight or not NebulaIcons then
+if not Library or not Twilight then
     LocalPlayer:Kick("Lunar Error: Failed to load core libraries. Check your internet connection or executor.")
     return
 end
@@ -1507,503 +1509,638 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
 end)
 
 --// ==========================================
---// INTERFACE CREATION (STARLIGHT)
+--// INTERFACE CREATION (LINORIALIB)
 --// ==========================================
 
-local Window = Starlight:CreateWindow({
-    Name = "Lunar Universal",
-    Subtitle = "V5.0.0 (Titan Edition)",
-    Icon = NebulaIcons:GetIcon('moon', 'Lucide'),
-    LoadingEnabled = true,
-    LoadingSettings = {
-        Title = "Booting Lunar Titan...",
-        Subtitle = "Injecting Advanced Physics Engine",
-    },
-    BuildWarnings = false,
-    InterfaceAdvertisingPrompts = false,
-    NotifyOnCallbackError = true,
-    FileSettings = {
-        ConfigFolder = "LunarTitanConfigs",
-        ThemesInRoot = false
-    },
-    DefaultSize = UDim2.new(0, 850, 0, 600)
+local Window = Library:CreateWindow({
+    Title = 'Lunar Universal V6.0.0 (Titan Edition)',
+    Center = true,
+    AutoShow = true,
+    TabPadding = 8,
+    MenuFadeTime = 0.2
 })
 
+local Tabs = {
+    Combat = Window:AddTab('Combat'),
+    Visuals = Window:AddTab('Visuals (ESP)'),
+    Radar = Window:AddTab('Radar'),
+    AntiAim = Window:AddTab('Anti-Aim'),
+    Movement = Window:AddTab('Movement'),
+    World = Window:AddTab('World & Troll'),
+    Settings = Window:AddTab('UI Settings')
+}
+
 --// 1. COMBAT TAB
-local CombatSection = Window:CreateTabSection("Combat", true)
-local AimTab = CombatSection:CreateTab({ Name = "Aimbot", Icon = NebulaIcons:GetIcon('crosshair', 'Lucide'), Columns = 2 }, "AimTab")
+local AimbotGB = Tabs.Combat:AddLeftGroupbox('Silent Aim')
+AimbotGB:AddToggle('SA_Toggle', {
+    Text = 'Enable Silent Aim', Default = false,
+    Callback = function(Value) Lunar.Features.Combat.SilentAim.Enabled = Value end
+})
+AimbotGB:AddDropdown('SA_Part', {
+    Values = {'Head', 'HumanoidRootPart', 'Torso'}, Default = 1, Multi = false, Text = 'Target Part',
+    Callback = function(Value) Lunar.Features.Combat.SilentAim.Part = Value end
+})
+AimbotGB:AddSlider('SA_Chance', {
+    Text = 'Hit Chance', Default = 100, Min = 1, Max = 100, Rounding = 0,
+    Callback = function(Value) Lunar.Features.Combat.SilentAim.HitChance = Value end
+})
+AimbotGB:AddToggle('SA_Wall', {
+    Text = 'Wall Check', Default = false,
+    Callback = function(Value) Lunar.Features.Combat.SilentAim.WallCheck = Value end
+})
 
-local AimbotGB = AimTab:CreateGroupbox({ Name = "Silent Aim", Column = 1 }, "AimbotGB")
-AimbotGB:CreateToggle({ Name = "Enable Silent Aim", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Combat.SilentAim.Enabled = v end }, "SA_Toggle")
-AimbotGB:CreateDropdown({ Name = "Target Part", Options = {"Head", "HumanoidRootPart", "Torso"}, CurrentOption = {"Head"}, Callback = function(v) Lunar.Features.Combat.SilentAim.Part = v[1] end }, "SA_Part")
-AimbotGB:CreateSlider({ Name = "Hit Chance", Range = {1, 100}, Increment = 1, Suffix = "%", CurrentValue = 100, Callback = function(v) Lunar.Features.Combat.SilentAim.HitChance = v end }, "SA_Chance")
-AimbotGB:CreateToggle({ Name = "Wall Check", CurrentValue = false, Style = 1, Callback = function(v) Lunar.Features.Combat.SilentAim.WallCheck = v end }, "SA_Wall")
+local FOVGB = Tabs.Combat:AddRightGroupbox('Field of View')
+FOVGB:AddToggle('FOV_Toggle', {
+    Text = 'Show FOV Circle', Default = true,
+    Callback = function(Value) Lunar.Features.Combat.FOV.Enabled = Value end
+}):AddColorPicker('FOV_Color', {
+    Default = Color3.fromRGB(255, 255, 255), Title = 'FOV Color',
+    Callback = function(Value) Lunar.Features.Combat.FOV.Color = Value end
+})
+FOVGB:AddSlider('FOV_Radius', {
+    Text = 'Radius', Default = 150, Min = 10, Max = 1000, Rounding = 0,
+    Callback = function(Value) Lunar.Features.Combat.FOV.Radius = Value end
+})
+FOVGB:AddToggle('FOV_Fill', {
+    Text = 'Filled Shape', Default = false,
+    Callback = function(Value) Lunar.Features.Combat.FOV.Filled = Value end
+})
+FOVGB:AddSlider('FOV_Thick', {
+    Text = 'Thickness', Default = 1, Min = 1, Max = 10, Rounding = 0,
+    Callback = function(Value) Lunar.Features.Combat.FOV.Thickness = Value end
+})
 
-local FOVGB = AimTab:CreateGroupbox({ Name = "Field of View", Column = 1 }, "FOVGB")
-FOVGB:CreateToggle({ Name = "Show FOV Circle", CurrentValue = true, Style = 2, Callback = function(v) Lunar.Features.Combat.FOV.Enabled = v end }, "FOV_Toggle")
-local fovColorLabel = FOVGB:CreateLabel({ Name = "FOV Color" }, "FOV_Color_LBL")
-fovColorLabel:AddColorPicker({ CurrentValue = Color3.fromRGB(255, 255, 255), Callback = function(c) Lunar.Features.Combat.FOV.Color = c end }, "FOV_Color")
-FOVGB:CreateSlider({ Name = "Radius", Range = {10, 1000}, Increment = 1, CurrentValue = 150, Callback = function(v) Lunar.Features.Combat.FOV.Radius = v end }, "FOV_Radius")
-FOVGB:CreateToggle({ Name = "Filled Shape", CurrentValue = false, Style = 1, Callback = function(v) Lunar.Features.Combat.FOV.Filled = v end }, "FOV_Fill")
-FOVGB:CreateSlider({ Name = "Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) Lunar.Features.Combat.FOV.Thickness = v end }, "FOV_Thick")
-
-local TriggerBotGB = AimTab:CreateGroupbox({ Name = "TriggerBot", Column = 2 }, "TriggerBotGB")
-TriggerBotGB:CreateToggle({ Name = "Enable TriggerBot", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Combat.TriggerBot.Enabled = v end }, "TB_Toggle")
-TriggerBotGB:CreateSlider({ Name = "Reaction Delay", Range = {0, 1000}, Increment = 10, Suffix = "ms", CurrentValue = 0, Callback = function(v) Lunar.Features.Combat.TriggerBot.Delay = v end }, "TB_Delay")
+local TriggerBotGB = Tabs.Combat:AddLeftGroupbox('TriggerBot')
+TriggerBotGB:AddToggle('TB_Toggle', {
+    Text = 'Enable TriggerBot', Default = false,
+    Callback = function(Value) Lunar.Features.Combat.TriggerBot.Enabled = Value end
+})
+TriggerBotGB:AddSlider('TB_Delay', {
+    Text = 'Reaction Delay', Default = 0, Min = 0, Max = 1000, Rounding = 0, Suffix = 'ms',
+    Callback = function(Value) Lunar.Features.Combat.TriggerBot.Delay = Value end
+})
 
 --// 2. ANTI-AIM / DESYNC TAB
-local DesyncTab = CombatSection:CreateTab({ Name = "Anti-Aim", Icon = NebulaIcons:GetIcon('shield', 'Lucide'), Columns = 2 }, "DesyncTab")
+local AA_MainGB = Tabs.AntiAim:AddLeftGroupbox('Desync Engine')
+AA_MainGB:AddToggle('AA_Toggle', {
+    Text = 'Enable Anti-Aim', Default = false,
+    Callback = function(Value) Lunar.Features.AntiAim.Enabled = Value end
+})
+AA_MainGB:AddDropdown('AA_Mode', {
+    Values = {'Static', 'Jitter', 'Spin', 'Orbit', 'Custom'}, Default = 1, Multi = false, Text = 'Desync Mode',
+    Callback = function(Value) Lunar.Features.AntiAim.Mode = Value end
+})
+AA_MainGB:AddSlider('AA_Power', {
+    Text = 'Desync Power', Default = 5000, Min = 1000, Max = 100000, Rounding = 0,
+    Callback = function(Value) Lunar.Features.AntiAim.DesyncPower = Value end
+})
 
-local AA_MainGB = DesyncTab:CreateGroupbox({ Name = "Desync Engine", Column = 1 }, "AA_MainGB")
-AA_MainGB:CreateToggle({ Name = "Enable Anti-Aim", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.AntiAim.Enabled = v end }, "AA_Toggle")
-AA_MainGB:CreateDropdown({ Name = "Desync Mode", Options = {"Static", "Jitter", "Spin", "Orbit", "Custom"}, CurrentOption = {"Static"}, Callback = function(v) Lunar.Features.AntiAim.Mode = v[1] end }, "AA_Mode")
-AA_MainGB:CreateSlider({ Name = "Desync Power", Range = {1000, 100000}, Increment = 1000, CurrentValue = 5000, Callback = function(v) Lunar.Features.AntiAim.DesyncPower = v end }, "AA_Power")
+local AA_AdvGB = Tabs.AntiAim:AddRightGroupbox('Advanced Settings')
+AA_AdvGB:AddSlider('AA_Spin', {
+    Text = 'Spin Speed', Default = 20, Min = 1, Max = 100, Rounding = 0,
+    Callback = function(Value) Lunar.Features.AntiAim.SpinSpeed = Value end
+})
+AA_AdvGB:AddSlider('AA_Orbit', {
+    Text = 'Orbit Radius', Default = 10, Min = 1, Max = 50, Rounding = 0,
+    Callback = function(Value) Lunar.Features.AntiAim.OrbitRadius = Value end
+})
+AA_AdvGB:AddSlider('AA_Multi', {
+    Text = 'Velocity Multiplier', Default = 1, Min = 1, Max = 10, Rounding = 1,
+    Callback = function(Value) Lunar.Features.AntiAim.VelocityMulti = Value end
+})
+AA_AdvGB:AddButton({
+    Text = 'Reset Desync Angles', Func = function() AntiAimAngle = 0 end, Tooltip = 'Resets anti-aim math parameters.'
+})
 
-local AA_AdvGB = DesyncTab:CreateGroupbox({ Name = "Advanced Settings", Column = 2 }, "AA_AdvGB")
-AA_AdvGB:CreateSlider({ Name = "Spin Speed", Range = {1, 100}, Increment = 1, CurrentValue = 20, Callback = function(v) Lunar.Features.AntiAim.SpinSpeed = v end }, "AA_Spin")
-AA_AdvGB:CreateSlider({ Name = "Orbit Radius", Range = {1, 50}, Increment = 1, CurrentValue = 10, Callback = function(v) Lunar.Features.AntiAim.OrbitRadius = v end }, "AA_Orbit")
-AA_AdvGB:CreateSlider({ Name = "Velocity Multiplier", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Callback = function(v) Lunar.Features.AntiAim.VelocityMulti = v end }, "AA_Multi")
-AA_AdvGB:CreateButton({ Name = "Reset Desync Angles", Icon = NebulaIcons:GetIcon('refresh-cw', 'Lucide'), Callback = function() AntiAimAngle = 0 end }, "AA_Reset")
+--// 3. VISUALS TAB (TWILIGHT ESP) - Massively populated via generator
 
---// 3. VISUALS TAB (TWILIGHT ESP)
-local VisualsSection = Window:CreateTabSection("Visuals", true)
+-- ESP FOR ENEMY
+local ESPGB_enemy = Tabs.Visuals:AddLeftGroupbox('ESP: Enemy')
+ESPGB_enemy:AddToggle('ESP_Master_enemy', {
+    Text = 'Enable Enemy', Default = false,
+    Callback = function(Value) TS.Checks.Team.SelectedTeams.enemy = Value; UpdateESP() end
+})
+ESPGB_enemy:AddDivider()
 
-local ESPTab_enemy = VisualsSection:CreateTab({ Name = "ESP: Enemy", Icon = NebulaIcons:GetIcon('eye', 'Lucide'), Columns = 3 }, "ESPTab_enemy")
+-- Boxes
+ESPGB_enemy:AddToggle('ESP_Box_Toggle_enemy', {
+    Text = 'Draw Boxes', Default = false,
+    Callback = function(Value) TS.Box.Enabled = Value; UpdateESP() end
+}):AddColorPicker('Col_enemy_1', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Outline Vis',
+    Callback = function(Value) TS.currentColors.enemy.Box.Outline.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_enemy_2', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Outline Invis',
+    Callback = function(Value) TS.currentColors.enemy.Box.Outline.Invisible = Value; UpdateESP() end
+})
 
--- MASTER CONTROLS
-local ESPMainGB_enemy = ESPTab_enemy:CreateGroupbox({ Name = "Main Settings", Column = 1 }, "ESPMainGB_enemy")
-ESPMainGB_enemy:CreateToggle({ Name = "Enable ESP for Enemy", CurrentValue = false, Style = 2, Callback = function(v) TS.Checks.Team.SelectedTeams.enemy = v; UpdateESP() end }, "ESP_Master_enemy")
+ESPGB_enemy:AddToggle('ESP_Box_Fill_enemy', {
+    Text = 'Filled Boxes', Default = false,
+    Callback = function(Value) TS.Box.Filled.Enabled = Value; UpdateESP() end
+}):AddColorPicker('Col_enemy_3', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Fill Vis',
+    Callback = function(Value) TS.currentColors.enemy.Box.Fill.Visible = Value; UpdateESP() end
+})
 
--- BOUNDING BOXES
-local ESPBoxGB_enemy = ESPTab_enemy:CreateGroupbox({ Name = "Bounding Boxes", Column = 1 }, "ESPBoxGB_enemy")
-ESPBoxGB_enemy:CreateToggle({ Name = "Enable Bounding Boxes", CurrentValue = false, Style = 2, Callback = function(v) TS.Box.Enabled = v; UpdateESP() end }, "ESP_Box_Toggle_enemy")
-ESPBoxGB_enemy:CreateDropdown({ Name = "Box Style", Options = {"Normal", "CornerBoxes"}, CurrentOption = {"Normal"}, Callback = function(v) 
-    if v[1] == "Normal" then TS.Box.Style = 2 else TS.Box.Style = 1 end
-    UpdateESP()
-end }, "ESP_Box_Style_enemy")
-ESPBoxGB_enemy:CreateToggle({ Name = "Enable Box Fill", CurrentValue = false, Style = 1, Callback = function(v) TS.Box.Filled.Enabled = v; UpdateESP() end }, "ESP_Box_Fill_enemy")
-ESPBoxGB_enemy:CreateSlider({ Name = "Box Thickness", Range = {1, 5}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Box.Thickness = v; UpdateESP() end }, "ESP_Box_Thick_enemy")
-ESPBoxGB_enemy:CreateSlider({ Name = "Fill Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Box.Filled.Transparency = v; UpdateESP() end }, "ESP_Box_FillTrans_enemy")
+ESPGB_enemy:AddDropdown('ESP_Box_Style_enemy', {
+    Values = {'Normal', 'CornerBoxes'}, Default = 1, Multi = false, Text = 'Box Style',
+    Callback = function(Value) 
+        if Value == 'Normal' then TS.Box.Style = 2 else TS.Box.Style = 1 end
+        UpdateESP()
+    end
+})
 
-local c_enemyLabel1 = ESPBoxGB_enemy:CreateLabel({ Name = "Box Outline Visible Color" }, "Col_LBL_enemy_1")
-c_enemyLabel1:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Box.Outline.Visible = c; UpdateESP() end }, "Col_enemy_1")
-local c_enemyLabel2 = ESPBoxGB_enemy:CreateLabel({ Name = "Box Outline Invisible Color" }, "Col_LBL_enemy_2")
-c_enemyLabel2:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Box.Outline.Invisible = c; UpdateESP() end }, "Col_enemy_2")
-local c_enemyLabel3 = ESPBoxGB_enemy:CreateLabel({ Name = "Box Fill Color" }, "Col_LBL_enemy_3")
-c_enemyLabel3:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Box.Fill.Visible = c; UpdateESP() end }, "Col_enemy_3")
+ESPGB_enemy:AddSlider('ESP_Box_Thick_enemy', {
+    Text = 'Box Thickness', Default = 1, Min = 1, Max = 5, Rounding = 0,
+    Callback = function(Value) TS.Box.Thickness = Value; UpdateESP() end
+})
 
--- OTHER FEATURES
-local ESPFeatGB_enemy = ESPTab_enemy:CreateGroupbox({ Name = "Features", Column = 2 }, "ESPFeatGB_enemy")
+ESPGB_enemy:AddDivider()
 
--- Name
-ESPFeatGB_enemy:CreateToggle({ Name = "Show Name", CurrentValue = false, Style = 1, Callback = function(v) TS.Name.Enabled.enemy = v; UpdateESP() end }, "ESP_Name_Toggle_enemy")
-local c_enemy_NameLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "Name Visible Color" }, "Col_LBL_Name_enemy_Vis")
-c_enemy_NameLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Name.Visible = c; UpdateESP() end }, "Col_Name_enemy_Vis")
-local c_enemy_NameLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "Name Invisible Color" }, "Col_LBL_Name_enemy_Invis")
-c_enemy_NameLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Name.Invisible = c; UpdateESP() end }, "Col_Name_enemy_Invis")
-ESPFeatGB_enemy:CreateDivider()
+ESPGB_enemy:AddToggle('ESP_Name_Toggle_enemy', {
+    Text = 'Show Name', Default = false,
+    Callback = function(Value) TS.Name.Enabled.enemy = Value; UpdateESP() end
+}):AddColorPicker('Col_Name_enemy_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Name Vis',
+    Callback = function(Value) TS.currentColors.enemy.Name.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Name_enemy_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Name Invis',
+    Callback = function(Value) TS.currentColors.enemy.Name.Invisible = Value; UpdateESP() end
+})
 
--- Distance
-ESPFeatGB_enemy:CreateToggle({ Name = "Show Distance", CurrentValue = false, Style = 1, Callback = function(v) TS.Distance.Enabled.enemy = v; UpdateESP() end }, "ESP_Distance_Toggle_enemy")
-local c_enemy_DistanceLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "Distance Visible Color" }, "Col_LBL_Distance_enemy_Vis")
-c_enemy_DistanceLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Distance.Visible = c; UpdateESP() end }, "Col_Distance_enemy_Vis")
-local c_enemy_DistanceLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "Distance Invisible Color" }, "Col_LBL_Distance_enemy_Invis")
-c_enemy_DistanceLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Distance.Invisible = c; UpdateESP() end }, "Col_Distance_enemy_Invis")
-ESPFeatGB_enemy:CreateDivider()
+ESPGB_enemy:AddToggle('ESP_Distance_Toggle_enemy', {
+    Text = 'Show Distance', Default = false,
+    Callback = function(Value) TS.Distance.Enabled.enemy = Value; UpdateESP() end
+}):AddColorPicker('Col_Distance_enemy_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Distance Vis',
+    Callback = function(Value) TS.currentColors.enemy.Distance.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Distance_enemy_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Distance Invis',
+    Callback = function(Value) TS.currentColors.enemy.Distance.Invisible = Value; UpdateESP() end
+})
 
--- Tracer
-ESPFeatGB_enemy:CreateToggle({ Name = "Show Tracer", CurrentValue = false, Style = 1, Callback = function(v) TS.Tracer.Enabled.enemy = v; UpdateESP() end }, "ESP_Tracer_Toggle_enemy")
-local c_enemy_TracerLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "Tracer Visible Color" }, "Col_LBL_Tracer_enemy_Vis")
-c_enemy_TracerLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Tracer.Visible = c; UpdateESP() end }, "Col_Tracer_enemy_Vis")
-local c_enemy_TracerLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "Tracer Invisible Color" }, "Col_LBL_Tracer_enemy_Invis")
-c_enemy_TracerLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Tracer.Invisible = c; UpdateESP() end }, "Col_Tracer_enemy_Invis")
-ESPFeatGB_enemy:CreateDivider()
+ESPGB_enemy:AddToggle('ESP_Tracer_Toggle_enemy', {
+    Text = 'Show Tracer', Default = false,
+    Callback = function(Value) TS.Tracer.Enabled.enemy = Value; UpdateESP() end
+}):AddColorPicker('Col_Tracer_enemy_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Tracer Vis',
+    Callback = function(Value) TS.currentColors.enemy.Tracer.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Tracer_enemy_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Tracer Invis',
+    Callback = function(Value) TS.currentColors.enemy.Tracer.Invisible = Value; UpdateESP() end
+})
 
--- Skeleton
-ESPFeatGB_enemy:CreateToggle({ Name = "Show Skeleton", CurrentValue = false, Style = 1, Callback = function(v) TS.Skeleton.Enabled.enemy = v; UpdateESP() end }, "ESP_Skeleton_Toggle_enemy")
-local c_enemy_SkeletonLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "Skeleton Visible Color" }, "Col_LBL_Skeleton_enemy_Vis")
-c_enemy_SkeletonLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Skeleton.Visible = c; UpdateESP() end }, "Col_Skeleton_enemy_Vis")
-local c_enemy_SkeletonLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "Skeleton Invisible Color" }, "Col_LBL_Skeleton_enemy_Invis")
-c_enemy_SkeletonLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Skeleton.Invisible = c; UpdateESP() end }, "Col_Skeleton_enemy_Invis")
-ESPFeatGB_enemy:CreateDivider()
+ESPGB_enemy:AddToggle('ESP_Skeleton_Toggle_enemy', {
+    Text = 'Show Skeleton', Default = false,
+    Callback = function(Value) TS.Skeleton.Enabled.enemy = Value; UpdateESP() end
+}):AddColorPicker('Col_Skeleton_enemy_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Skeleton Vis',
+    Callback = function(Value) TS.currentColors.enemy.Skeleton.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Skeleton_enemy_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Skeleton Invis',
+    Callback = function(Value) TS.currentColors.enemy.Skeleton.Invisible = Value; UpdateESP() end
+})
 
--- HealthBar
-ESPFeatGB_enemy:CreateToggle({ Name = "Show HealthBar", CurrentValue = false, Style = 1, Callback = function(v) TS.HealthBar.Enabled.enemy = v; UpdateESP() end }, "ESP_HealthBar_Toggle_enemy")
-local c_enemy_HealthBarLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "HealthBar Visible Color" }, "Col_LBL_HealthBar_enemy_Vis")
-c_enemy_HealthBarLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.HealthBar.Visible = c; UpdateESP() end }, "Col_HealthBar_enemy_Vis")
-local c_enemy_HealthBarLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "HealthBar Invisible Color" }, "Col_LBL_HealthBar_enemy_Invis")
-c_enemy_HealthBarLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.HealthBar.Invisible = c; UpdateESP() end }, "Col_HealthBar_enemy_Invis")
-ESPFeatGB_enemy:CreateDivider()
+ESPGB_enemy:AddToggle('ESP_HealthBar_Toggle_enemy', {
+    Text = 'Show HealthBar', Default = false,
+    Callback = function(Value) TS.HealthBar.Enabled.enemy = Value; UpdateESP() end
+}):AddColorPicker('Col_HealthBar_enemy_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'HealthBar Vis',
+    Callback = function(Value) TS.currentColors.enemy.HealthBar.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_HealthBar_enemy_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'HealthBar Invis',
+    Callback = function(Value) TS.currentColors.enemy.HealthBar.Invisible = Value; UpdateESP() end
+})
 
--- Chams
-ESPFeatGB_enemy:CreateToggle({ Name = "Show Chams", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Enabled.enemy = v; UpdateESP() end }, "ESP_Chams_Toggle_enemy")
-local c_enemy_ChamsLabel_Vis = ESPFeatGB_enemy:CreateLabel({ Name = "Chams Visible Color" }, "Col_LBL_Chams_enemy_Vis")
-c_enemy_ChamsLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.enemy.Chams.Visible = c; UpdateESP() end }, "Col_Chams_enemy_Vis")
-local c_enemy_ChamsLabel_Invis = ESPFeatGB_enemy:CreateLabel({ Name = "Chams Invisible Color" }, "Col_LBL_Chams_enemy_Invis")
-c_enemy_ChamsLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.enemy.Chams.Invisible = c; UpdateESP() end }, "Col_Chams_enemy_Invis")
-ESPFeatGB_enemy:CreateDivider()
+ESPGB_enemy:AddToggle('ESP_Chams_Toggle_enemy', {
+    Text = 'Show Chams', Default = false,
+    Callback = function(Value) TS.Chams.Enabled.enemy = Value; UpdateESP() end
+}):AddColorPicker('Col_Chams_enemy_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Chams Vis',
+    Callback = function(Value) TS.currentColors.enemy.Chams.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Chams_enemy_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Chams Invis',
+    Callback = function(Value) TS.currentColors.enemy.Chams.Invisible = Value; UpdateESP() end
+})
 
--- EXTRA CONFIGURATIONS
-local ESPExtraGB_enemy = ESPTab_enemy:CreateGroupbox({ Name = "Extra Parameters", Column = 3 }, "ESPExtraGB_enemy")
-ESPExtraGB_enemy:CreateSlider({ Name = "Skeleton Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Skeleton.Thickness = v; UpdateESP() end }, "ESP_Skel_Thick_enemy")
-ESPExtraGB_enemy:CreateSlider({ Name = "Tracer Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Tracer.Thickness = v; UpdateESP() end }, "ESP_Tracer_Thick_enemy")
-ESPExtraGB_enemy:CreateDropdown({ Name = "Tracer Origin", Options = {"Bottom", "Center", "Top", "Mouse", "LocalHumanoid"}, CurrentOption = {"Bottom"}, Callback = function(v) 
-    if v[1] == "Bottom" then TS.Tracer.Origin = 2
-    elseif v[1] == "Top" then TS.Tracer.Origin = 3
-    elseif v[1] == "Center" then TS.Tracer.Origin = 4
-    elseif v[1] == "Mouse" then TS.Tracer.Origin = 5
-    else TS.Tracer.Origin = 1 end
-    UpdateESP()
-end }, "ESP_Tracer_Origin_enemy")
-ESPExtraGB_enemy:CreateDropdown({ Name = "Name Format", Options = {"Standard", "Upper", "Lower"}, CurrentOption = {"Standard"}, Callback = function(v) TS.Name.Style = 1; UpdateESP() end }, "ESP_Name_Style_enemy")
-ESPExtraGB_enemy:CreateToggle({ Name = "Chams Occlusion", CurrentValue = true, Style = 1, Callback = function(v) TS.Chams.Occlusion = v; UpdateESP() end }, "ESP_Chams_Occ_enemy")
-ESPExtraGB_enemy:CreateToggle({ Name = "Chams Outline", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Outline.Enabled = v; UpdateESP() end }, "ESP_Chams_Out_enemy")
-ESPExtraGB_enemy:CreateSlider({ Name = "Chams Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Chams.Fill.Transparency = v; UpdateESP() end }, "ESP_Chams_Trans_enemy")
+-- Extra Options for enemy
+ESPGB_enemy:AddSlider('ESP_Skel_Thick_enemy', { Text = 'Skeleton Thickness', Default = 1, Min = 1, Max = 10, Rounding = 0, Callback = function(Value) TS.Skeleton.Thickness = Value; UpdateESP() end })
+ESPGB_enemy:AddSlider('ESP_Tracer_Thick_enemy', { Text = 'Tracer Thickness', Default = 1, Min = 1, Max = 10, Rounding = 0, Callback = function(Value) TS.Tracer.Thickness = Value; UpdateESP() end })
 
+-- ESP FOR FRIENDLY
+local ESPGB_friendly = Tabs.Visuals:AddRightGroupbox('ESP: Friendly')
+ESPGB_friendly:AddToggle('ESP_Master_friendly', {
+    Text = 'Enable Friendly', Default = false,
+    Callback = function(Value) TS.Checks.Team.SelectedTeams.friendly = Value; UpdateESP() end
+})
+ESPGB_friendly:AddDivider()
 
-local ESPTab_friendly = VisualsSection:CreateTab({ Name = "ESP: Friendly", Icon = NebulaIcons:GetIcon('eye', 'Lucide'), Columns = 3 }, "ESPTab_friendly")
+-- Boxes
+ESPGB_friendly:AddToggle('ESP_Box_Toggle_friendly', {
+    Text = 'Draw Boxes', Default = false,
+    Callback = function(Value) TS.Box.Enabled = Value; UpdateESP() end
+}):AddColorPicker('Col_friendly_1', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Outline Vis',
+    Callback = function(Value) TS.currentColors.friendly.Box.Outline.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_friendly_2', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Outline Invis',
+    Callback = function(Value) TS.currentColors.friendly.Box.Outline.Invisible = Value; UpdateESP() end
+})
 
--- MASTER CONTROLS
-local ESPMainGB_friendly = ESPTab_friendly:CreateGroupbox({ Name = "Main Settings", Column = 1 }, "ESPMainGB_friendly")
-ESPMainGB_friendly:CreateToggle({ Name = "Enable ESP for Friendly", CurrentValue = false, Style = 2, Callback = function(v) TS.Checks.Team.SelectedTeams.friendly = v; UpdateESP() end }, "ESP_Master_friendly")
+ESPGB_friendly:AddToggle('ESP_Box_Fill_friendly', {
+    Text = 'Filled Boxes', Default = false,
+    Callback = function(Value) TS.Box.Filled.Enabled = Value; UpdateESP() end
+}):AddColorPicker('Col_friendly_3', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Fill Vis',
+    Callback = function(Value) TS.currentColors.friendly.Box.Fill.Visible = Value; UpdateESP() end
+})
 
--- BOUNDING BOXES
-local ESPBoxGB_friendly = ESPTab_friendly:CreateGroupbox({ Name = "Bounding Boxes", Column = 1 }, "ESPBoxGB_friendly")
-ESPBoxGB_friendly:CreateToggle({ Name = "Enable Bounding Boxes", CurrentValue = false, Style = 2, Callback = function(v) TS.Box.Enabled = v; UpdateESP() end }, "ESP_Box_Toggle_friendly")
-ESPBoxGB_friendly:CreateDropdown({ Name = "Box Style", Options = {"Normal", "CornerBoxes"}, CurrentOption = {"Normal"}, Callback = function(v) 
-    if v[1] == "Normal" then TS.Box.Style = 2 else TS.Box.Style = 1 end
-    UpdateESP()
-end }, "ESP_Box_Style_friendly")
-ESPBoxGB_friendly:CreateToggle({ Name = "Enable Box Fill", CurrentValue = false, Style = 1, Callback = function(v) TS.Box.Filled.Enabled = v; UpdateESP() end }, "ESP_Box_Fill_friendly")
-ESPBoxGB_friendly:CreateSlider({ Name = "Box Thickness", Range = {1, 5}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Box.Thickness = v; UpdateESP() end }, "ESP_Box_Thick_friendly")
-ESPBoxGB_friendly:CreateSlider({ Name = "Fill Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Box.Filled.Transparency = v; UpdateESP() end }, "ESP_Box_FillTrans_friendly")
+ESPGB_friendly:AddDropdown('ESP_Box_Style_friendly', {
+    Values = {'Normal', 'CornerBoxes'}, Default = 1, Multi = false, Text = 'Box Style',
+    Callback = function(Value) 
+        if Value == 'Normal' then TS.Box.Style = 2 else TS.Box.Style = 1 end
+        UpdateESP()
+    end
+})
 
-local c_friendlyLabel1 = ESPBoxGB_friendly:CreateLabel({ Name = "Box Outline Visible Color" }, "Col_LBL_friendly_1")
-c_friendlyLabel1:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Box.Outline.Visible = c; UpdateESP() end }, "Col_friendly_1")
-local c_friendlyLabel2 = ESPBoxGB_friendly:CreateLabel({ Name = "Box Outline Invisible Color" }, "Col_LBL_friendly_2")
-c_friendlyLabel2:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Box.Outline.Invisible = c; UpdateESP() end }, "Col_friendly_2")
-local c_friendlyLabel3 = ESPBoxGB_friendly:CreateLabel({ Name = "Box Fill Color" }, "Col_LBL_friendly_3")
-c_friendlyLabel3:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Box.Fill.Visible = c; UpdateESP() end }, "Col_friendly_3")
+ESPGB_friendly:AddSlider('ESP_Box_Thick_friendly', {
+    Text = 'Box Thickness', Default = 1, Min = 1, Max = 5, Rounding = 0,
+    Callback = function(Value) TS.Box.Thickness = Value; UpdateESP() end
+})
 
--- OTHER FEATURES
-local ESPFeatGB_friendly = ESPTab_friendly:CreateGroupbox({ Name = "Features", Column = 2 }, "ESPFeatGB_friendly")
+ESPGB_friendly:AddDivider()
 
--- Name
-ESPFeatGB_friendly:CreateToggle({ Name = "Show Name", CurrentValue = false, Style = 1, Callback = function(v) TS.Name.Enabled.friendly = v; UpdateESP() end }, "ESP_Name_Toggle_friendly")
-local c_friendly_NameLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "Name Visible Color" }, "Col_LBL_Name_friendly_Vis")
-c_friendly_NameLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Name.Visible = c; UpdateESP() end }, "Col_Name_friendly_Vis")
-local c_friendly_NameLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "Name Invisible Color" }, "Col_LBL_Name_friendly_Invis")
-c_friendly_NameLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Name.Invisible = c; UpdateESP() end }, "Col_Name_friendly_Invis")
-ESPFeatGB_friendly:CreateDivider()
+ESPGB_friendly:AddToggle('ESP_Name_Toggle_friendly', {
+    Text = 'Show Name', Default = false,
+    Callback = function(Value) TS.Name.Enabled.friendly = Value; UpdateESP() end
+}):AddColorPicker('Col_Name_friendly_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Name Vis',
+    Callback = function(Value) TS.currentColors.friendly.Name.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Name_friendly_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Name Invis',
+    Callback = function(Value) TS.currentColors.friendly.Name.Invisible = Value; UpdateESP() end
+})
 
--- Distance
-ESPFeatGB_friendly:CreateToggle({ Name = "Show Distance", CurrentValue = false, Style = 1, Callback = function(v) TS.Distance.Enabled.friendly = v; UpdateESP() end }, "ESP_Distance_Toggle_friendly")
-local c_friendly_DistanceLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "Distance Visible Color" }, "Col_LBL_Distance_friendly_Vis")
-c_friendly_DistanceLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Distance.Visible = c; UpdateESP() end }, "Col_Distance_friendly_Vis")
-local c_friendly_DistanceLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "Distance Invisible Color" }, "Col_LBL_Distance_friendly_Invis")
-c_friendly_DistanceLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Distance.Invisible = c; UpdateESP() end }, "Col_Distance_friendly_Invis")
-ESPFeatGB_friendly:CreateDivider()
+ESPGB_friendly:AddToggle('ESP_Distance_Toggle_friendly', {
+    Text = 'Show Distance', Default = false,
+    Callback = function(Value) TS.Distance.Enabled.friendly = Value; UpdateESP() end
+}):AddColorPicker('Col_Distance_friendly_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Distance Vis',
+    Callback = function(Value) TS.currentColors.friendly.Distance.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Distance_friendly_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Distance Invis',
+    Callback = function(Value) TS.currentColors.friendly.Distance.Invisible = Value; UpdateESP() end
+})
 
--- Tracer
-ESPFeatGB_friendly:CreateToggle({ Name = "Show Tracer", CurrentValue = false, Style = 1, Callback = function(v) TS.Tracer.Enabled.friendly = v; UpdateESP() end }, "ESP_Tracer_Toggle_friendly")
-local c_friendly_TracerLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "Tracer Visible Color" }, "Col_LBL_Tracer_friendly_Vis")
-c_friendly_TracerLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Tracer.Visible = c; UpdateESP() end }, "Col_Tracer_friendly_Vis")
-local c_friendly_TracerLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "Tracer Invisible Color" }, "Col_LBL_Tracer_friendly_Invis")
-c_friendly_TracerLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Tracer.Invisible = c; UpdateESP() end }, "Col_Tracer_friendly_Invis")
-ESPFeatGB_friendly:CreateDivider()
+ESPGB_friendly:AddToggle('ESP_Tracer_Toggle_friendly', {
+    Text = 'Show Tracer', Default = false,
+    Callback = function(Value) TS.Tracer.Enabled.friendly = Value; UpdateESP() end
+}):AddColorPicker('Col_Tracer_friendly_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Tracer Vis',
+    Callback = function(Value) TS.currentColors.friendly.Tracer.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Tracer_friendly_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Tracer Invis',
+    Callback = function(Value) TS.currentColors.friendly.Tracer.Invisible = Value; UpdateESP() end
+})
 
--- Skeleton
-ESPFeatGB_friendly:CreateToggle({ Name = "Show Skeleton", CurrentValue = false, Style = 1, Callback = function(v) TS.Skeleton.Enabled.friendly = v; UpdateESP() end }, "ESP_Skeleton_Toggle_friendly")
-local c_friendly_SkeletonLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "Skeleton Visible Color" }, "Col_LBL_Skeleton_friendly_Vis")
-c_friendly_SkeletonLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Skeleton.Visible = c; UpdateESP() end }, "Col_Skeleton_friendly_Vis")
-local c_friendly_SkeletonLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "Skeleton Invisible Color" }, "Col_LBL_Skeleton_friendly_Invis")
-c_friendly_SkeletonLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Skeleton.Invisible = c; UpdateESP() end }, "Col_Skeleton_friendly_Invis")
-ESPFeatGB_friendly:CreateDivider()
+ESPGB_friendly:AddToggle('ESP_Skeleton_Toggle_friendly', {
+    Text = 'Show Skeleton', Default = false,
+    Callback = function(Value) TS.Skeleton.Enabled.friendly = Value; UpdateESP() end
+}):AddColorPicker('Col_Skeleton_friendly_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Skeleton Vis',
+    Callback = function(Value) TS.currentColors.friendly.Skeleton.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Skeleton_friendly_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Skeleton Invis',
+    Callback = function(Value) TS.currentColors.friendly.Skeleton.Invisible = Value; UpdateESP() end
+})
 
--- HealthBar
-ESPFeatGB_friendly:CreateToggle({ Name = "Show HealthBar", CurrentValue = false, Style = 1, Callback = function(v) TS.HealthBar.Enabled.friendly = v; UpdateESP() end }, "ESP_HealthBar_Toggle_friendly")
-local c_friendly_HealthBarLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "HealthBar Visible Color" }, "Col_LBL_HealthBar_friendly_Vis")
-c_friendly_HealthBarLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.HealthBar.Visible = c; UpdateESP() end }, "Col_HealthBar_friendly_Vis")
-local c_friendly_HealthBarLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "HealthBar Invisible Color" }, "Col_LBL_HealthBar_friendly_Invis")
-c_friendly_HealthBarLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.HealthBar.Invisible = c; UpdateESP() end }, "Col_HealthBar_friendly_Invis")
-ESPFeatGB_friendly:CreateDivider()
+ESPGB_friendly:AddToggle('ESP_HealthBar_Toggle_friendly', {
+    Text = 'Show HealthBar', Default = false,
+    Callback = function(Value) TS.HealthBar.Enabled.friendly = Value; UpdateESP() end
+}):AddColorPicker('Col_HealthBar_friendly_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'HealthBar Vis',
+    Callback = function(Value) TS.currentColors.friendly.HealthBar.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_HealthBar_friendly_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'HealthBar Invis',
+    Callback = function(Value) TS.currentColors.friendly.HealthBar.Invisible = Value; UpdateESP() end
+})
 
--- Chams
-ESPFeatGB_friendly:CreateToggle({ Name = "Show Chams", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Enabled.friendly = v; UpdateESP() end }, "ESP_Chams_Toggle_friendly")
-local c_friendly_ChamsLabel_Vis = ESPFeatGB_friendly:CreateLabel({ Name = "Chams Visible Color" }, "Col_LBL_Chams_friendly_Vis")
-c_friendly_ChamsLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.friendly.Chams.Visible = c; UpdateESP() end }, "Col_Chams_friendly_Vis")
-local c_friendly_ChamsLabel_Invis = ESPFeatGB_friendly:CreateLabel({ Name = "Chams Invisible Color" }, "Col_LBL_Chams_friendly_Invis")
-c_friendly_ChamsLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.friendly.Chams.Invisible = c; UpdateESP() end }, "Col_Chams_friendly_Invis")
-ESPFeatGB_friendly:CreateDivider()
+ESPGB_friendly:AddToggle('ESP_Chams_Toggle_friendly', {
+    Text = 'Show Chams', Default = false,
+    Callback = function(Value) TS.Chams.Enabled.friendly = Value; UpdateESP() end
+}):AddColorPicker('Col_Chams_friendly_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Chams Vis',
+    Callback = function(Value) TS.currentColors.friendly.Chams.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Chams_friendly_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Chams Invis',
+    Callback = function(Value) TS.currentColors.friendly.Chams.Invisible = Value; UpdateESP() end
+})
 
--- EXTRA CONFIGURATIONS
-local ESPExtraGB_friendly = ESPTab_friendly:CreateGroupbox({ Name = "Extra Parameters", Column = 3 }, "ESPExtraGB_friendly")
-ESPExtraGB_friendly:CreateSlider({ Name = "Skeleton Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Skeleton.Thickness = v; UpdateESP() end }, "ESP_Skel_Thick_friendly")
-ESPExtraGB_friendly:CreateSlider({ Name = "Tracer Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Tracer.Thickness = v; UpdateESP() end }, "ESP_Tracer_Thick_friendly")
-ESPExtraGB_friendly:CreateDropdown({ Name = "Tracer Origin", Options = {"Bottom", "Center", "Top", "Mouse", "LocalHumanoid"}, CurrentOption = {"Bottom"}, Callback = function(v) 
-    if v[1] == "Bottom" then TS.Tracer.Origin = 2
-    elseif v[1] == "Top" then TS.Tracer.Origin = 3
-    elseif v[1] == "Center" then TS.Tracer.Origin = 4
-    elseif v[1] == "Mouse" then TS.Tracer.Origin = 5
-    else TS.Tracer.Origin = 1 end
-    UpdateESP()
-end }, "ESP_Tracer_Origin_friendly")
-ESPExtraGB_friendly:CreateDropdown({ Name = "Name Format", Options = {"Standard", "Upper", "Lower"}, CurrentOption = {"Standard"}, Callback = function(v) TS.Name.Style = 1; UpdateESP() end }, "ESP_Name_Style_friendly")
-ESPExtraGB_friendly:CreateToggle({ Name = "Chams Occlusion", CurrentValue = true, Style = 1, Callback = function(v) TS.Chams.Occlusion = v; UpdateESP() end }, "ESP_Chams_Occ_friendly")
-ESPExtraGB_friendly:CreateToggle({ Name = "Chams Outline", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Outline.Enabled = v; UpdateESP() end }, "ESP_Chams_Out_friendly")
-ESPExtraGB_friendly:CreateSlider({ Name = "Chams Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Chams.Fill.Transparency = v; UpdateESP() end }, "ESP_Chams_Trans_friendly")
+-- Extra Options for friendly
+ESPGB_friendly:AddSlider('ESP_Skel_Thick_friendly', { Text = 'Skeleton Thickness', Default = 1, Min = 1, Max = 10, Rounding = 0, Callback = function(Value) TS.Skeleton.Thickness = Value; UpdateESP() end })
+ESPGB_friendly:AddSlider('ESP_Tracer_Thick_friendly', { Text = 'Tracer Thickness', Default = 1, Min = 1, Max = 10, Rounding = 0, Callback = function(Value) TS.Tracer.Thickness = Value; UpdateESP() end })
 
+-- ESP FOR LOCALP
+local ESPGB_localp = Tabs.Visuals:AddRightGroupbox('ESP: Local Player')
+ESPGB_localp:AddToggle('ESP_Master_localp', {
+    Text = 'Enable Local Player', Default = false,
+    Callback = function(Value) TS.Checks.Team.SelectedTeams.localp = Value; UpdateESP() end
+})
+ESPGB_localp:AddDivider()
 
-local ESPTab_generic = VisualsSection:CreateTab({ Name = "ESP: Generic", Icon = NebulaIcons:GetIcon('eye', 'Lucide'), Columns = 3 }, "ESPTab_generic")
+-- Boxes
+ESPGB_localp:AddToggle('ESP_Box_Toggle_localp', {
+    Text = 'Draw Boxes', Default = false,
+    Callback = function(Value) TS.Box.Enabled = Value; UpdateESP() end
+}):AddColorPicker('Col_localp_1', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Outline Vis',
+    Callback = function(Value) TS.currentColors.localp.Box.Outline.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_localp_2', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Outline Invis',
+    Callback = function(Value) TS.currentColors.localp.Box.Outline.Invisible = Value; UpdateESP() end
+})
 
--- MASTER CONTROLS
-local ESPMainGB_generic = ESPTab_generic:CreateGroupbox({ Name = "Main Settings", Column = 1 }, "ESPMainGB_generic")
-ESPMainGB_generic:CreateToggle({ Name = "Enable ESP for Generic", CurrentValue = false, Style = 2, Callback = function(v) TS.Checks.Team.SelectedTeams.generic = v; UpdateESP() end }, "ESP_Master_generic")
+ESPGB_localp:AddToggle('ESP_Box_Fill_localp', {
+    Text = 'Filled Boxes', Default = false,
+    Callback = function(Value) TS.Box.Filled.Enabled = Value; UpdateESP() end
+}):AddColorPicker('Col_localp_3', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Fill Vis',
+    Callback = function(Value) TS.currentColors.localp.Box.Fill.Visible = Value; UpdateESP() end
+})
 
--- BOUNDING BOXES
-local ESPBoxGB_generic = ESPTab_generic:CreateGroupbox({ Name = "Bounding Boxes", Column = 1 }, "ESPBoxGB_generic")
-ESPBoxGB_generic:CreateToggle({ Name = "Enable Bounding Boxes", CurrentValue = false, Style = 2, Callback = function(v) TS.Box.Enabled = v; UpdateESP() end }, "ESP_Box_Toggle_generic")
-ESPBoxGB_generic:CreateDropdown({ Name = "Box Style", Options = {"Normal", "CornerBoxes"}, CurrentOption = {"Normal"}, Callback = function(v) 
-    if v[1] == "Normal" then TS.Box.Style = 2 else TS.Box.Style = 1 end
-    UpdateESP()
-end }, "ESP_Box_Style_generic")
-ESPBoxGB_generic:CreateToggle({ Name = "Enable Box Fill", CurrentValue = false, Style = 1, Callback = function(v) TS.Box.Filled.Enabled = v; UpdateESP() end }, "ESP_Box_Fill_generic")
-ESPBoxGB_generic:CreateSlider({ Name = "Box Thickness", Range = {1, 5}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Box.Thickness = v; UpdateESP() end }, "ESP_Box_Thick_generic")
-ESPBoxGB_generic:CreateSlider({ Name = "Fill Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Box.Filled.Transparency = v; UpdateESP() end }, "ESP_Box_FillTrans_generic")
+ESPGB_localp:AddDropdown('ESP_Box_Style_localp', {
+    Values = {'Normal', 'CornerBoxes'}, Default = 1, Multi = false, Text = 'Box Style',
+    Callback = function(Value) 
+        if Value == 'Normal' then TS.Box.Style = 2 else TS.Box.Style = 1 end
+        UpdateESP()
+    end
+})
 
-local c_genericLabel1 = ESPBoxGB_generic:CreateLabel({ Name = "Box Outline Visible Color" }, "Col_LBL_generic_1")
-c_genericLabel1:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Box.Outline.Visible = c; UpdateESP() end }, "Col_generic_1")
-local c_genericLabel2 = ESPBoxGB_generic:CreateLabel({ Name = "Box Outline Invisible Color" }, "Col_LBL_generic_2")
-c_genericLabel2:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Box.Outline.Invisible = c; UpdateESP() end }, "Col_generic_2")
-local c_genericLabel3 = ESPBoxGB_generic:CreateLabel({ Name = "Box Fill Color" }, "Col_LBL_generic_3")
-c_genericLabel3:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Box.Fill.Visible = c; UpdateESP() end }, "Col_generic_3")
+ESPGB_localp:AddSlider('ESP_Box_Thick_localp', {
+    Text = 'Box Thickness', Default = 1, Min = 1, Max = 5, Rounding = 0,
+    Callback = function(Value) TS.Box.Thickness = Value; UpdateESP() end
+})
 
--- OTHER FEATURES
-local ESPFeatGB_generic = ESPTab_generic:CreateGroupbox({ Name = "Features", Column = 2 }, "ESPFeatGB_generic")
+ESPGB_localp:AddDivider()
 
--- Name
-ESPFeatGB_generic:CreateToggle({ Name = "Show Name", CurrentValue = false, Style = 1, Callback = function(v) TS.Name.Enabled.generic = v; UpdateESP() end }, "ESP_Name_Toggle_generic")
-local c_generic_NameLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "Name Visible Color" }, "Col_LBL_Name_generic_Vis")
-c_generic_NameLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Name.Visible = c; UpdateESP() end }, "Col_Name_generic_Vis")
-local c_generic_NameLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "Name Invisible Color" }, "Col_LBL_Name_generic_Invis")
-c_generic_NameLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Name.Invisible = c; UpdateESP() end }, "Col_Name_generic_Invis")
-ESPFeatGB_generic:CreateDivider()
+ESPGB_localp:AddToggle('ESP_Name_Toggle_localp', {
+    Text = 'Show Name', Default = false,
+    Callback = function(Value) TS.Name.Enabled.localp = Value; UpdateESP() end
+}):AddColorPicker('Col_Name_localp_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Name Vis',
+    Callback = function(Value) TS.currentColors.localp.Name.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Name_localp_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Name Invis',
+    Callback = function(Value) TS.currentColors.localp.Name.Invisible = Value; UpdateESP() end
+})
 
--- Distance
-ESPFeatGB_generic:CreateToggle({ Name = "Show Distance", CurrentValue = false, Style = 1, Callback = function(v) TS.Distance.Enabled.generic = v; UpdateESP() end }, "ESP_Distance_Toggle_generic")
-local c_generic_DistanceLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "Distance Visible Color" }, "Col_LBL_Distance_generic_Vis")
-c_generic_DistanceLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Distance.Visible = c; UpdateESP() end }, "Col_Distance_generic_Vis")
-local c_generic_DistanceLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "Distance Invisible Color" }, "Col_LBL_Distance_generic_Invis")
-c_generic_DistanceLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Distance.Invisible = c; UpdateESP() end }, "Col_Distance_generic_Invis")
-ESPFeatGB_generic:CreateDivider()
+ESPGB_localp:AddToggle('ESP_Distance_Toggle_localp', {
+    Text = 'Show Distance', Default = false,
+    Callback = function(Value) TS.Distance.Enabled.localp = Value; UpdateESP() end
+}):AddColorPicker('Col_Distance_localp_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Distance Vis',
+    Callback = function(Value) TS.currentColors.localp.Distance.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Distance_localp_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Distance Invis',
+    Callback = function(Value) TS.currentColors.localp.Distance.Invisible = Value; UpdateESP() end
+})
 
--- Tracer
-ESPFeatGB_generic:CreateToggle({ Name = "Show Tracer", CurrentValue = false, Style = 1, Callback = function(v) TS.Tracer.Enabled.generic = v; UpdateESP() end }, "ESP_Tracer_Toggle_generic")
-local c_generic_TracerLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "Tracer Visible Color" }, "Col_LBL_Tracer_generic_Vis")
-c_generic_TracerLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Tracer.Visible = c; UpdateESP() end }, "Col_Tracer_generic_Vis")
-local c_generic_TracerLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "Tracer Invisible Color" }, "Col_LBL_Tracer_generic_Invis")
-c_generic_TracerLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Tracer.Invisible = c; UpdateESP() end }, "Col_Tracer_generic_Invis")
-ESPFeatGB_generic:CreateDivider()
+ESPGB_localp:AddToggle('ESP_Tracer_Toggle_localp', {
+    Text = 'Show Tracer', Default = false,
+    Callback = function(Value) TS.Tracer.Enabled.localp = Value; UpdateESP() end
+}):AddColorPicker('Col_Tracer_localp_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Tracer Vis',
+    Callback = function(Value) TS.currentColors.localp.Tracer.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Tracer_localp_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Tracer Invis',
+    Callback = function(Value) TS.currentColors.localp.Tracer.Invisible = Value; UpdateESP() end
+})
 
--- Skeleton
-ESPFeatGB_generic:CreateToggle({ Name = "Show Skeleton", CurrentValue = false, Style = 1, Callback = function(v) TS.Skeleton.Enabled.generic = v; UpdateESP() end }, "ESP_Skeleton_Toggle_generic")
-local c_generic_SkeletonLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "Skeleton Visible Color" }, "Col_LBL_Skeleton_generic_Vis")
-c_generic_SkeletonLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Skeleton.Visible = c; UpdateESP() end }, "Col_Skeleton_generic_Vis")
-local c_generic_SkeletonLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "Skeleton Invisible Color" }, "Col_LBL_Skeleton_generic_Invis")
-c_generic_SkeletonLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Skeleton.Invisible = c; UpdateESP() end }, "Col_Skeleton_generic_Invis")
-ESPFeatGB_generic:CreateDivider()
+ESPGB_localp:AddToggle('ESP_Skeleton_Toggle_localp', {
+    Text = 'Show Skeleton', Default = false,
+    Callback = function(Value) TS.Skeleton.Enabled.localp = Value; UpdateESP() end
+}):AddColorPicker('Col_Skeleton_localp_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Skeleton Vis',
+    Callback = function(Value) TS.currentColors.localp.Skeleton.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Skeleton_localp_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Skeleton Invis',
+    Callback = function(Value) TS.currentColors.localp.Skeleton.Invisible = Value; UpdateESP() end
+})
 
--- HealthBar
-ESPFeatGB_generic:CreateToggle({ Name = "Show HealthBar", CurrentValue = false, Style = 1, Callback = function(v) TS.HealthBar.Enabled.generic = v; UpdateESP() end }, "ESP_HealthBar_Toggle_generic")
-local c_generic_HealthBarLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "HealthBar Visible Color" }, "Col_LBL_HealthBar_generic_Vis")
-c_generic_HealthBarLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.HealthBar.Visible = c; UpdateESP() end }, "Col_HealthBar_generic_Vis")
-local c_generic_HealthBarLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "HealthBar Invisible Color" }, "Col_LBL_HealthBar_generic_Invis")
-c_generic_HealthBarLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.HealthBar.Invisible = c; UpdateESP() end }, "Col_HealthBar_generic_Invis")
-ESPFeatGB_generic:CreateDivider()
+ESPGB_localp:AddToggle('ESP_HealthBar_Toggle_localp', {
+    Text = 'Show HealthBar', Default = false,
+    Callback = function(Value) TS.HealthBar.Enabled.localp = Value; UpdateESP() end
+}):AddColorPicker('Col_HealthBar_localp_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'HealthBar Vis',
+    Callback = function(Value) TS.currentColors.localp.HealthBar.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_HealthBar_localp_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'HealthBar Invis',
+    Callback = function(Value) TS.currentColors.localp.HealthBar.Invisible = Value; UpdateESP() end
+})
 
--- Chams
-ESPFeatGB_generic:CreateToggle({ Name = "Show Chams", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Enabled.generic = v; UpdateESP() end }, "ESP_Chams_Toggle_generic")
-local c_generic_ChamsLabel_Vis = ESPFeatGB_generic:CreateLabel({ Name = "Chams Visible Color" }, "Col_LBL_Chams_generic_Vis")
-c_generic_ChamsLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.generic.Chams.Visible = c; UpdateESP() end }, "Col_Chams_generic_Vis")
-local c_generic_ChamsLabel_Invis = ESPFeatGB_generic:CreateLabel({ Name = "Chams Invisible Color" }, "Col_LBL_Chams_generic_Invis")
-c_generic_ChamsLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.generic.Chams.Invisible = c; UpdateESP() end }, "Col_Chams_generic_Invis")
-ESPFeatGB_generic:CreateDivider()
+ESPGB_localp:AddToggle('ESP_Chams_Toggle_localp', {
+    Text = 'Show Chams', Default = false,
+    Callback = function(Value) TS.Chams.Enabled.localp = Value; UpdateESP() end
+}):AddColorPicker('Col_Chams_localp_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Chams Vis',
+    Callback = function(Value) TS.currentColors.localp.Chams.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Chams_localp_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Chams Invis',
+    Callback = function(Value) TS.currentColors.localp.Chams.Invisible = Value; UpdateESP() end
+})
 
--- EXTRA CONFIGURATIONS
-local ESPExtraGB_generic = ESPTab_generic:CreateGroupbox({ Name = "Extra Parameters", Column = 3 }, "ESPExtraGB_generic")
-ESPExtraGB_generic:CreateSlider({ Name = "Skeleton Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Skeleton.Thickness = v; UpdateESP() end }, "ESP_Skel_Thick_generic")
-ESPExtraGB_generic:CreateSlider({ Name = "Tracer Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Tracer.Thickness = v; UpdateESP() end }, "ESP_Tracer_Thick_generic")
-ESPExtraGB_generic:CreateDropdown({ Name = "Tracer Origin", Options = {"Bottom", "Center", "Top", "Mouse", "LocalHumanoid"}, CurrentOption = {"Bottom"}, Callback = function(v) 
-    if v[1] == "Bottom" then TS.Tracer.Origin = 2
-    elseif v[1] == "Top" then TS.Tracer.Origin = 3
-    elseif v[1] == "Center" then TS.Tracer.Origin = 4
-    elseif v[1] == "Mouse" then TS.Tracer.Origin = 5
-    else TS.Tracer.Origin = 1 end
-    UpdateESP()
-end }, "ESP_Tracer_Origin_generic")
-ESPExtraGB_generic:CreateDropdown({ Name = "Name Format", Options = {"Standard", "Upper", "Lower"}, CurrentOption = {"Standard"}, Callback = function(v) TS.Name.Style = 1; UpdateESP() end }, "ESP_Name_Style_generic")
-ESPExtraGB_generic:CreateToggle({ Name = "Chams Occlusion", CurrentValue = true, Style = 1, Callback = function(v) TS.Chams.Occlusion = v; UpdateESP() end }, "ESP_Chams_Occ_generic")
-ESPExtraGB_generic:CreateToggle({ Name = "Chams Outline", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Outline.Enabled = v; UpdateESP() end }, "ESP_Chams_Out_generic")
-ESPExtraGB_generic:CreateSlider({ Name = "Chams Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Chams.Fill.Transparency = v; UpdateESP() end }, "ESP_Chams_Trans_generic")
+-- Extra Options for localp
+ESPGB_localp:AddSlider('ESP_Skel_Thick_localp', { Text = 'Skeleton Thickness', Default = 1, Min = 1, Max = 10, Rounding = 0, Callback = function(Value) TS.Skeleton.Thickness = Value; UpdateESP() end })
+ESPGB_localp:AddSlider('ESP_Tracer_Thick_localp', { Text = 'Tracer Thickness', Default = 1, Min = 1, Max = 10, Rounding = 0, Callback = function(Value) TS.Tracer.Thickness = Value; UpdateESP() end })
 
+-- ESP FOR GENERIC
+local ESPGB_generic = Tabs.Visuals:AddLeftGroupbox('ESP: Generic')
+ESPGB_generic:AddToggle('ESP_Master_generic', {
+    Text = 'Enable Generic', Default = false,
+    Callback = function(Value) TS.Checks.Team.SelectedTeams.generic = Value; UpdateESP() end
+})
+ESPGB_generic:AddDivider()
 
-local ESPTab_localp = VisualsSection:CreateTab({ Name = "ESP: Local Player", Icon = NebulaIcons:GetIcon('eye', 'Lucide'), Columns = 3 }, "ESPTab_localp")
+-- Boxes
+ESPGB_generic:AddToggle('ESP_Box_Toggle_generic', {
+    Text = 'Draw Boxes', Default = false,
+    Callback = function(Value) TS.Box.Enabled = Value; UpdateESP() end
+}):AddColorPicker('Col_generic_1', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Outline Vis',
+    Callback = function(Value) TS.currentColors.generic.Box.Outline.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_generic_2', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Outline Invis',
+    Callback = function(Value) TS.currentColors.generic.Box.Outline.Invisible = Value; UpdateESP() end
+})
 
--- MASTER CONTROLS
-local ESPMainGB_localp = ESPTab_localp:CreateGroupbox({ Name = "Main Settings", Column = 1 }, "ESPMainGB_localp")
-ESPMainGB_localp:CreateToggle({ Name = "Enable ESP for Local Player", CurrentValue = false, Style = 2, Callback = function(v) TS.Checks.Team.SelectedTeams.localp = v; UpdateESP() end }, "ESP_Master_localp")
+ESPGB_generic:AddToggle('ESP_Box_Fill_generic', {
+    Text = 'Filled Boxes', Default = false,
+    Callback = function(Value) TS.Box.Filled.Enabled = Value; UpdateESP() end
+}):AddColorPicker('Col_generic_3', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Fill Vis',
+    Callback = function(Value) TS.currentColors.generic.Box.Fill.Visible = Value; UpdateESP() end
+})
 
--- BOUNDING BOXES
-local ESPBoxGB_localp = ESPTab_localp:CreateGroupbox({ Name = "Bounding Boxes", Column = 1 }, "ESPBoxGB_localp")
-ESPBoxGB_localp:CreateToggle({ Name = "Enable Bounding Boxes", CurrentValue = false, Style = 2, Callback = function(v) TS.Box.Enabled = v; UpdateESP() end }, "ESP_Box_Toggle_localp")
-ESPBoxGB_localp:CreateDropdown({ Name = "Box Style", Options = {"Normal", "CornerBoxes"}, CurrentOption = {"Normal"}, Callback = function(v) 
-    if v[1] == "Normal" then TS.Box.Style = 2 else TS.Box.Style = 1 end
-    UpdateESP()
-end }, "ESP_Box_Style_localp")
-ESPBoxGB_localp:CreateToggle({ Name = "Enable Box Fill", CurrentValue = false, Style = 1, Callback = function(v) TS.Box.Filled.Enabled = v; UpdateESP() end }, "ESP_Box_Fill_localp")
-ESPBoxGB_localp:CreateSlider({ Name = "Box Thickness", Range = {1, 5}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Box.Thickness = v; UpdateESP() end }, "ESP_Box_Thick_localp")
-ESPBoxGB_localp:CreateSlider({ Name = "Fill Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Box.Filled.Transparency = v; UpdateESP() end }, "ESP_Box_FillTrans_localp")
+ESPGB_generic:AddDropdown('ESP_Box_Style_generic', {
+    Values = {'Normal', 'CornerBoxes'}, Default = 1, Multi = false, Text = 'Box Style',
+    Callback = function(Value) 
+        if Value == 'Normal' then TS.Box.Style = 2 else TS.Box.Style = 1 end
+        UpdateESP()
+    end
+})
 
-local c_localpLabel1 = ESPBoxGB_localp:CreateLabel({ Name = "Box Outline Visible Color" }, "Col_LBL_localp_1")
-c_localpLabel1:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Box.Outline.Visible = c; UpdateESP() end }, "Col_localp_1")
-local c_localpLabel2 = ESPBoxGB_localp:CreateLabel({ Name = "Box Outline Invisible Color" }, "Col_LBL_localp_2")
-c_localpLabel2:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Box.Outline.Invisible = c; UpdateESP() end }, "Col_localp_2")
-local c_localpLabel3 = ESPBoxGB_localp:CreateLabel({ Name = "Box Fill Color" }, "Col_LBL_localp_3")
-c_localpLabel3:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Box.Fill.Visible = c; UpdateESP() end }, "Col_localp_3")
+ESPGB_generic:AddSlider('ESP_Box_Thick_generic', {
+    Text = 'Box Thickness', Default = 1, Min = 1, Max = 5, Rounding = 0,
+    Callback = function(Value) TS.Box.Thickness = Value; UpdateESP() end
+})
 
--- OTHER FEATURES
-local ESPFeatGB_localp = ESPTab_localp:CreateGroupbox({ Name = "Features", Column = 2 }, "ESPFeatGB_localp")
+ESPGB_generic:AddDivider()
 
--- Name
-ESPFeatGB_localp:CreateToggle({ Name = "Show Name", CurrentValue = false, Style = 1, Callback = function(v) TS.Name.Enabled.localp = v; UpdateESP() end }, "ESP_Name_Toggle_localp")
-local c_localp_NameLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "Name Visible Color" }, "Col_LBL_Name_localp_Vis")
-c_localp_NameLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Name.Visible = c; UpdateESP() end }, "Col_Name_localp_Vis")
-local c_localp_NameLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "Name Invisible Color" }, "Col_LBL_Name_localp_Invis")
-c_localp_NameLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Name.Invisible = c; UpdateESP() end }, "Col_Name_localp_Invis")
-ESPFeatGB_localp:CreateDivider()
+ESPGB_generic:AddToggle('ESP_Name_Toggle_generic', {
+    Text = 'Show Name', Default = false,
+    Callback = function(Value) TS.Name.Enabled.generic = Value; UpdateESP() end
+}):AddColorPicker('Col_Name_generic_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Name Vis',
+    Callback = function(Value) TS.currentColors.generic.Name.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Name_generic_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Name Invis',
+    Callback = function(Value) TS.currentColors.generic.Name.Invisible = Value; UpdateESP() end
+})
 
--- Distance
-ESPFeatGB_localp:CreateToggle({ Name = "Show Distance", CurrentValue = false, Style = 1, Callback = function(v) TS.Distance.Enabled.localp = v; UpdateESP() end }, "ESP_Distance_Toggle_localp")
-local c_localp_DistanceLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "Distance Visible Color" }, "Col_LBL_Distance_localp_Vis")
-c_localp_DistanceLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Distance.Visible = c; UpdateESP() end }, "Col_Distance_localp_Vis")
-local c_localp_DistanceLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "Distance Invisible Color" }, "Col_LBL_Distance_localp_Invis")
-c_localp_DistanceLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Distance.Invisible = c; UpdateESP() end }, "Col_Distance_localp_Invis")
-ESPFeatGB_localp:CreateDivider()
+ESPGB_generic:AddToggle('ESP_Distance_Toggle_generic', {
+    Text = 'Show Distance', Default = false,
+    Callback = function(Value) TS.Distance.Enabled.generic = Value; UpdateESP() end
+}):AddColorPicker('Col_Distance_generic_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Distance Vis',
+    Callback = function(Value) TS.currentColors.generic.Distance.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Distance_generic_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Distance Invis',
+    Callback = function(Value) TS.currentColors.generic.Distance.Invisible = Value; UpdateESP() end
+})
 
--- Tracer
-ESPFeatGB_localp:CreateToggle({ Name = "Show Tracer", CurrentValue = false, Style = 1, Callback = function(v) TS.Tracer.Enabled.localp = v; UpdateESP() end }, "ESP_Tracer_Toggle_localp")
-local c_localp_TracerLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "Tracer Visible Color" }, "Col_LBL_Tracer_localp_Vis")
-c_localp_TracerLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Tracer.Visible = c; UpdateESP() end }, "Col_Tracer_localp_Vis")
-local c_localp_TracerLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "Tracer Invisible Color" }, "Col_LBL_Tracer_localp_Invis")
-c_localp_TracerLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Tracer.Invisible = c; UpdateESP() end }, "Col_Tracer_localp_Invis")
-ESPFeatGB_localp:CreateDivider()
+ESPGB_generic:AddToggle('ESP_Tracer_Toggle_generic', {
+    Text = 'Show Tracer', Default = false,
+    Callback = function(Value) TS.Tracer.Enabled.generic = Value; UpdateESP() end
+}):AddColorPicker('Col_Tracer_generic_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Tracer Vis',
+    Callback = function(Value) TS.currentColors.generic.Tracer.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Tracer_generic_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Tracer Invis',
+    Callback = function(Value) TS.currentColors.generic.Tracer.Invisible = Value; UpdateESP() end
+})
 
--- Skeleton
-ESPFeatGB_localp:CreateToggle({ Name = "Show Skeleton", CurrentValue = false, Style = 1, Callback = function(v) TS.Skeleton.Enabled.localp = v; UpdateESP() end }, "ESP_Skeleton_Toggle_localp")
-local c_localp_SkeletonLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "Skeleton Visible Color" }, "Col_LBL_Skeleton_localp_Vis")
-c_localp_SkeletonLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Skeleton.Visible = c; UpdateESP() end }, "Col_Skeleton_localp_Vis")
-local c_localp_SkeletonLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "Skeleton Invisible Color" }, "Col_LBL_Skeleton_localp_Invis")
-c_localp_SkeletonLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Skeleton.Invisible = c; UpdateESP() end }, "Col_Skeleton_localp_Invis")
-ESPFeatGB_localp:CreateDivider()
+ESPGB_generic:AddToggle('ESP_Skeleton_Toggle_generic', {
+    Text = 'Show Skeleton', Default = false,
+    Callback = function(Value) TS.Skeleton.Enabled.generic = Value; UpdateESP() end
+}):AddColorPicker('Col_Skeleton_generic_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Skeleton Vis',
+    Callback = function(Value) TS.currentColors.generic.Skeleton.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Skeleton_generic_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Skeleton Invis',
+    Callback = function(Value) TS.currentColors.generic.Skeleton.Invisible = Value; UpdateESP() end
+})
 
--- HealthBar
-ESPFeatGB_localp:CreateToggle({ Name = "Show HealthBar", CurrentValue = false, Style = 1, Callback = function(v) TS.HealthBar.Enabled.localp = v; UpdateESP() end }, "ESP_HealthBar_Toggle_localp")
-local c_localp_HealthBarLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "HealthBar Visible Color" }, "Col_LBL_HealthBar_localp_Vis")
-c_localp_HealthBarLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.HealthBar.Visible = c; UpdateESP() end }, "Col_HealthBar_localp_Vis")
-local c_localp_HealthBarLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "HealthBar Invisible Color" }, "Col_LBL_HealthBar_localp_Invis")
-c_localp_HealthBarLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.HealthBar.Invisible = c; UpdateESP() end }, "Col_HealthBar_localp_Invis")
-ESPFeatGB_localp:CreateDivider()
+ESPGB_generic:AddToggle('ESP_HealthBar_Toggle_generic', {
+    Text = 'Show HealthBar', Default = false,
+    Callback = function(Value) TS.HealthBar.Enabled.generic = Value; UpdateESP() end
+}):AddColorPicker('Col_HealthBar_generic_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'HealthBar Vis',
+    Callback = function(Value) TS.currentColors.generic.HealthBar.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_HealthBar_generic_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'HealthBar Invis',
+    Callback = function(Value) TS.currentColors.generic.HealthBar.Invisible = Value; UpdateESP() end
+})
 
--- Chams
-ESPFeatGB_localp:CreateToggle({ Name = "Show Chams", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Enabled.localp = v; UpdateESP() end }, "ESP_Chams_Toggle_localp")
-local c_localp_ChamsLabel_Vis = ESPFeatGB_localp:CreateLabel({ Name = "Chams Visible Color" }, "Col_LBL_Chams_localp_Vis")
-c_localp_ChamsLabel_Vis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) TS.currentColors.localp.Chams.Visible = c; UpdateESP() end }, "Col_Chams_localp_Vis")
-local c_localp_ChamsLabel_Invis = ESPFeatGB_localp:CreateLabel({ Name = "Chams Invisible Color" }, "Col_LBL_Chams_localp_Invis")
-c_localp_ChamsLabel_Invis:AddColorPicker({ CurrentValue = Color3.fromRGB(255,0,0), Callback = function(c) TS.currentColors.localp.Chams.Invisible = c; UpdateESP() end }, "Col_Chams_localp_Invis")
-ESPFeatGB_localp:CreateDivider()
+ESPGB_generic:AddToggle('ESP_Chams_Toggle_generic', {
+    Text = 'Show Chams', Default = false,
+    Callback = function(Value) TS.Chams.Enabled.generic = Value; UpdateESP() end
+}):AddColorPicker('Col_Chams_generic_Vis', {
+    Default = Color3.fromRGB(255,255,255), Title = 'Chams Vis',
+    Callback = function(Value) TS.currentColors.generic.Chams.Visible = Value; UpdateESP() end
+}):AddColorPicker('Col_Chams_generic_Invis', {
+    Default = Color3.fromRGB(255,0,0), Title = 'Chams Invis',
+    Callback = function(Value) TS.currentColors.generic.Chams.Invisible = Value; UpdateESP() end
+})
 
--- EXTRA CONFIGURATIONS
-local ESPExtraGB_localp = ESPTab_localp:CreateGroupbox({ Name = "Extra Parameters", Column = 3 }, "ESPExtraGB_localp")
-ESPExtraGB_localp:CreateSlider({ Name = "Skeleton Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Skeleton.Thickness = v; UpdateESP() end }, "ESP_Skel_Thick_localp")
-ESPExtraGB_localp:CreateSlider({ Name = "Tracer Thickness", Range = {1, 10}, Increment = 1, CurrentValue = 1, Callback = function(v) TS.Tracer.Thickness = v; UpdateESP() end }, "ESP_Tracer_Thick_localp")
-ESPExtraGB_localp:CreateDropdown({ Name = "Tracer Origin", Options = {"Bottom", "Center", "Top", "Mouse", "LocalHumanoid"}, CurrentOption = {"Bottom"}, Callback = function(v) 
-    if v[1] == "Bottom" then TS.Tracer.Origin = 2
-    elseif v[1] == "Top" then TS.Tracer.Origin = 3
-    elseif v[1] == "Center" then TS.Tracer.Origin = 4
-    elseif v[1] == "Mouse" then TS.Tracer.Origin = 5
-    else TS.Tracer.Origin = 1 end
-    UpdateESP()
-end }, "ESP_Tracer_Origin_localp")
-ESPExtraGB_localp:CreateDropdown({ Name = "Name Format", Options = {"Standard", "Upper", "Lower"}, CurrentOption = {"Standard"}, Callback = function(v) TS.Name.Style = 1; UpdateESP() end }, "ESP_Name_Style_localp")
-ESPExtraGB_localp:CreateToggle({ Name = "Chams Occlusion", CurrentValue = true, Style = 1, Callback = function(v) TS.Chams.Occlusion = v; UpdateESP() end }, "ESP_Chams_Occ_localp")
-ESPExtraGB_localp:CreateToggle({ Name = "Chams Outline", CurrentValue = false, Style = 1, Callback = function(v) TS.Chams.Outline.Enabled = v; UpdateESP() end }, "ESP_Chams_Out_localp")
-ESPExtraGB_localp:CreateSlider({ Name = "Chams Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Callback = function(v) TS.Chams.Fill.Transparency = v; UpdateESP() end }, "ESP_Chams_Trans_localp")
-
+-- Extra Options for generic
+ESPGB_generic:AddSlider('ESP_Skel_Thick_generic', { Text = 'Skeleton Thickness', Default = 1, Min = 1, Max = 10, Rounding = 0, Callback = function(Value) TS.Skeleton.Thickness = Value; UpdateESP() end })
+ESPGB_generic:AddSlider('ESP_Tracer_Thick_generic', { Text = 'Tracer Thickness', Default = 1, Min = 1, Max = 10, Rounding = 0, Callback = function(Value) TS.Tracer.Thickness = Value; UpdateESP() end })
 
 --// RADAR TAB
-local RadarTab = VisualsSection:CreateTab({ Name = "Radar settings", Icon = NebulaIcons:GetIcon('activity', 'Lucide'), Columns = 2 }, "RadarTab")
-local RadarGB = RadarTab:CreateGroupbox({ Name = "Radar Display", Column = 1 }, "RadarGB")
-RadarGB:CreateToggle({ Name = "Enable Radar", CurrentValue = false, Style = 2, Callback = function(v) TS.Radar.Enabled = v; UpdateESP() end }, "Radar_Toggle")
-RadarGB:CreateSlider({ Name = "Radar Radius", Range = {50, 500}, Increment = 10, CurrentValue = 100, Callback = function(v) TS.Radar.Radius = v; UpdateESP() end }, "Radar_Rad")
-RadarGB:CreateSlider({ Name = "Radar Scale", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Callback = function(v) TS.Radar.Scale = v; UpdateESP() end }, "Radar_Scale")
-
-local rColBg = RadarGB:CreateLabel({ Name = "Radar Background" }, "Radar_Bg")
-rColBg:AddColorPicker({ CurrentValue = Color3.fromRGB(30,30,30), Callback = function(c) TS.currentColors.Radar.Background = c; UpdateESP() end }, "Radar_Bg_Col")
-local rColBd = RadarGB:CreateLabel({ Name = "Radar Border" }, "Radar_Bd")
-rColBd:AddColorPicker({ CurrentValue = Color3.fromRGB(60,60,60), Callback = function(c) TS.currentColors.Radar.Border = c; UpdateESP() end }, "Radar_Bd_Col")
+local RadarGB = Tabs.Radar:AddLeftGroupbox('Radar Setup')
+RadarGB:AddToggle('Radar_Toggle', {
+    Text = 'Enable Radar', Default = false,
+    Callback = function(Value) TS.Radar.Enabled = Value; UpdateESP() end
+})
+RadarGB:AddSlider('Radar_Rad', {
+    Text = 'Radar Radius', Default = 100, Min = 50, Max = 500, Rounding = 0,
+    Callback = function(Value) TS.Radar.Radius = Value; UpdateESP() end
+})
+RadarGB:AddSlider('Radar_Scale', {
+    Text = 'Radar Scale', Default = 1, Min = 1, Max = 10, Rounding = 1,
+    Callback = function(Value) TS.Radar.Scale = Value; UpdateESP() end
+})
+local RadarColGB = Tabs.Radar:AddRightGroupbox('Radar Colors')
+RadarColGB:AddLabel('Radar Background'):AddColorPicker('Radar_Bg_Col', {
+    Default = Color3.fromRGB(30,30,30), Title = 'Background', Callback = function(Value) TS.currentColors.Radar.Background = Value; UpdateESP() end
+})
+RadarColGB:AddLabel('Radar Border'):AddColorPicker('Radar_Bd_Col', {
+    Default = Color3.fromRGB(60,60,60), Title = 'Border', Callback = function(Value) TS.currentColors.Radar.Border = Value; UpdateESP() end
+})
 
 --// 4. MOVEMENT TAB
-local MovementSection = Window:CreateTabSection("Movement", true)
-local MoveTab = MovementSection:CreateTab({ Name = "Local Player", Icon = NebulaIcons:GetIcon('move', 'Lucide'), Columns = 2 }, "MoveTab")
+local SpeedGB = Tabs.Movement:AddLeftGroupbox('Speed Hack')
+SpeedGB:AddToggle('Spd_Toggle', {
+    Text = 'Enable Speed', Default = false,
+    Callback = function(Value) Lunar.Features.Movement.Speed.Enabled = Value end
+})
+SpeedGB:AddSlider('Spd_Value', {
+    Text = 'Speed Amount', Default = 50, Min = 16, Max = 500, Rounding = 0,
+    Callback = function(Value) Lunar.Features.Movement.Speed.Value = Value end
+})
+SpeedGB:AddDropdown('Spd_Method', {
+    Values = {'CFrame', 'Velocity'}, Default = 1, Multi = false, Text = 'Method',
+    Callback = function(Value) Lunar.Features.Movement.Speed.Method = Value end
+})
 
-local SpeedGB = MoveTab:CreateGroupbox({ Name = "Speed Hack", Column = 1 }, "SpeedGB")
-SpeedGB:CreateToggle({ Name = "Enable Speed", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Movement.Speed.Enabled = v end }, "Spd_Toggle")
-SpeedGB:CreateSlider({ Name = "Speed Amount", Range = {16, 500}, Increment = 1, CurrentValue = 50, Callback = function(v) Lunar.Features.Movement.Speed.Value = v end }, "Spd_Value")
-SpeedGB:CreateDropdown({ Name = "Method", Options = {"CFrame", "Velocity"}, CurrentOption = {"CFrame"}, Callback = function(v) Lunar.Features.Movement.Speed.Method = v[1] end }, "Spd_Method")
-
-local MoveMiscGB = MoveTab:CreateGroupbox({ Name = "Agility Options", Column = 2 }, "MoveMiscGB")
-MoveMiscGB:CreateToggle({ Name = "Infinite Jump", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Movement.InfiniteJump = v end }, "Move_InfJump")
-MoveMiscGB:CreateToggle({ Name = "Bunny Hop", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Movement.BunnyHop = v end }, "Move_BHop")
-MoveMiscGB:CreateToggle({ Name = "Spider Climb", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Movement.Spider = v end }, "Move_Spider")
+local MoveMiscGB = Tabs.Movement:AddRightGroupbox('Agility Options')
+MoveMiscGB:AddToggle('Move_InfJump', { Text = 'Infinite Jump', Default = false, Callback = function(Value) Lunar.Features.Movement.InfiniteJump = Value end })
+MoveMiscGB:AddToggle('Move_BHop', { Text = 'Bunny Hop', Default = false, Callback = function(Value) Lunar.Features.Movement.BunnyHop = Value end })
+MoveMiscGB:AddToggle('Move_Spider', { Text = 'Spider Climb', Default = false, Callback = function(Value) Lunar.Features.Movement.Spider = Value end })
 
 --// 5. WORLD TAB
-local WorldTab = MovementSection:CreateTab({ Name = "World Editing", Icon = NebulaIcons:GetIcon('globe', 'Lucide'), Columns = 2 }, "WorldTab")
+local LightingGB = Tabs.World:AddLeftGroupbox('Lighting')
+LightingGB:AddToggle('World_FB', { Text = 'Fullbright', Default = false, Callback = function(Value) Lunar.Features.Visuals.World.Fullbright = Value end })
+LightingGB:AddLabel('Ambient Color'):AddColorPicker('Amb_Color', { Default = Color3.fromRGB(255,255,255), Callback = function(Value) Lunar.Features.Visuals.World.Ambient = Value end })
+LightingGB:AddSlider('World_Time', { Text = 'Time of Day', Default = 14, Min = 0, Max = 24, Rounding = 0, Callback = function(Value) Lunar.Features.Visuals.World.TimeOfDay = Value end })
+LightingGB:AddSlider('World_Fog', { Text = 'Fog Distance', Default = 100000, Min = 0, Max = 100000, Rounding = 0, Callback = function(Value) Lunar.Features.Visuals.World.FogEnd = Value end })
 
-local LightingGB = WorldTab:CreateGroupbox({ Name = "Lighting Overrides", Column = 1 }, "LightingGB")
-LightingGB:CreateToggle({ Name = "Fullbright", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Visuals.World.Fullbright = v end }, "World_FB")
-local ambLabel = LightingGB:CreateLabel({ Name = "Ambient Color" }, "Amb_LBL")
-ambLabel:AddColorPicker({ CurrentValue = Color3.fromRGB(255,255,255), Callback = function(c) Lunar.Features.Visuals.World.Ambient = c end }, "Amb_Color")
-LightingGB:CreateSlider({ Name = "Time of Day", Range = {0, 24}, Increment = 1, CurrentValue = 14, Callback = function(v) Lunar.Features.Visuals.World.TimeOfDay = v end }, "World_Time")
-LightingGB:CreateSlider({ Name = "Fog Distance", Range = {0, 100000}, Increment = 100, CurrentValue = 100000, Callback = function(v) Lunar.Features.Visuals.World.FogEnd = v end }, "World_Fog")
-
---// 6. TROLL TAB
-local TrollTab = MovementSection:CreateTab({ Name = "Troll Options", Icon = NebulaIcons:GetIcon('users', 'Lucide'), Columns = 2 }, "TrollTab")
-local TrollGB = TrollTab:CreateGroupbox({ Name = "Player Manipulation", Column = 1 }, "TrollGB")
-TrollGB:CreateToggle({ Name = "Spin Fling", CurrentValue = false, Style = 2, Callback = function(v) Lunar.Features.Troll.SpinFling = v end }, "Troll_SpinFling")
-TrollGB:CreateButton({ Name = "Fling Server", Icon = NebulaIcons:GetIcon('zap', 'Lucide'), Callback = function() 
+local TrollGB = Tabs.World:AddRightGroupbox('Troll Options')
+TrollGB:AddToggle('Troll_SpinFling', { Text = 'Spin Fling', Default = false, Callback = function(Value) Lunar.Features.Troll.SpinFling = Value end })
+TrollGB:AddButton({ Text = 'Fling Server', Func = function() 
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = LocalPlayer.Character.HumanoidRootPart
         hrp.Velocity = Vector3.new(9999999, 9999999, 9999999)
         hrp.RotVelocity = Vector3.new(9999999, 9999999, 9999999)
     end
-end }, "Troll_FlingSrv")
+end })
 
---// 7. SETTINGS TAB
-local ConfigSection = Window:CreateTabSection("Configuration", true)
-local SettingsTab = ConfigSection:CreateTab({ Name = "System Settings", Icon = NebulaIcons:GetIcon('settings', 'Lucide'), Columns = 2 }, "SettingsTab")
+--// 6. SETTINGS TAB (LinoriaLib Native Config)
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
 
-SettingsTab:BuildConfigGroupbox(1)
-SettingsTab:BuildThemeGroupbox(2)
+ThemeManager:SetFolder('LunarTitan')
+SaveManager:SetFolder('LunarTitan/Configs')
 
--- Load defaults
-pcall(function() Starlight:SetTheme("Nebula") end)
-pcall(function() Starlight:LoadAutoloadTheme() end)
-pcall(function() Starlight:LoadAutoloadConfig() end)
+local MenuSettings = Tabs.Settings:AddLeftGroupbox('Menu Settings')
+MenuSettings:AddButton('Unload', function() Library:Unload() end)
+MenuSettings:AddLabel('Menu bind'):AddKeyPicker('MenuKeybind', { Default = 'End', NoUI = true, Text = 'Menu keybind' })
+Library.ToggleKeybind = Options.MenuKeybind
 
--- Notification
-Starlight:Notification({
-    Title = "Lunar Titan Initialized",
-    Icon = NebulaIcons:GetIcon('shield-check', 'Lucide'),
-    Content = "Advanced physics modules injected. Welcome to Lunar V5.0.0.",
-    Duration = 5
-}, "INIT_NOTIF")
+ThemeManager:ApplyToTab(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+SaveManager:LoadAutoloadConfig()
+
+Library:Notify('Lunar Universal V6 (Linoria) loaded successfully!', 5)
