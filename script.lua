@@ -15,12 +15,12 @@ local Twilight = loadstring(game:HttpGet(
 
 
 local Starlight = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/Nebula-Softworks/Starlight-Interface-Suite/master/Source.lua"
+    "https://raw.nebulasoftworks.xyz/starlight"
 ))()
 
 
 local NebulaIcons = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/Nebula-Softworks/Nebula-Icon-Library/master/Loader.lua"
+    "https://raw.nebulasoftworks.xyz/nebula-icon-library-loader"
 ))()
 
 
