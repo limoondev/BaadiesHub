@@ -1,0 +1,1029 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║ UNIVERSAL SCRIPT — TWILIGHT ESP + STARLIGHT UI ║
+-- ║ ESP COMPLET 100% NATIF TWILIGHT | v1.2.1 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+
+-- ══════════════════════════════════════════
+-- CHARGEMENT LIBS
+-- ══════════════════════════════════════════
+
+
+local Twilight = loadstring(game:HttpGet(
+    "https://raw.nebulasoftworks.xyz/twilight"
+))()
+
+
+local Starlight = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Nebula-Softworks/Starlight-Interface-Suite/master/Source.lua"
+))()
+
+
+local NebulaIcons = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Nebula-Softworks/Nebula-Icon-Library/master/Loader.lua"
+))()
+
+
+-- ══════════════════════════════════════════
+-- SERVICES & VARIABLES
+-- ══════════════════════════════════════════
+
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+
+-- ══════════════════════════════════════════
+-- CRÉATION FENÊTRE STARLIGHT
+-- ══════════════════════════════════════════
+
+
+local Window = Starlight:CreateWindow({
+    Name = "Universal Script",
+    Subtitle = "Twilight ESP Edition",
+    Icon = NebulaIcons:GetIcon("eye", "Lucide"),
+    LoadingSettings = {
+        Title = "Universal Script",
+        Subtitle = "Chargement Twilight ESP...",
+    },
+    FileSettings = {
+        ConfigFolder = "UniversalScript_Twilight",
+    },
+    NotifyOnCallbackError = true,
+})
+
+
+-- ══════════════════════════════════════════════════════════════
+-- TABS STARLIGHT
+-- ══════════════════════════════════════════════════════════════
+
+
+local TabESP = Window:CreateTab({ Name = "ESP", Icon = NebulaIcons:GetIcon("eye", "Lucide") })
+local TabPlayer = Window:CreateTab({ Name = "Player", Icon = NebulaIcons:GetIcon("user", "Lucide") })
+local TabVisuals = Window:CreateTab({ Name = "Visuals", Icon = NebulaIcons:GetIcon("palette", "Lucide") })
+local TabWorld = Window:CreateTab({ Name = "World", Icon = NebulaIcons:GetIcon("globe", "Lucide") })
+local TabSettings = Window:CreateTab({ Name = "Settings", Icon = NebulaIcons:GetIcon("settings", "Lucide") })
+
+
+-- ══════════════════════════════════════════════════════════════
+-- TWILIGHT ESP — CONFIGURATION INITIALE
+-- ══════════════════════════════════════════════════════════════
+
+
+-- Couleurs par défaut
+local Colors = {
+    EnemyBox = Color3.fromRGB(255, 60, 60),
+    FriendlyBox = Color3.fromRGB(60, 220, 60),
+    GenericBox = Color3.fromRGB(255, 255, 255),
+    EnemyTracer = Color3.fromRGB(255, 60, 60),
+    FriendlyTracer = Color3.fromRGB(60, 220, 60),
+    GenericTracer = Color3.fromRGB(255, 255, 255),
+    EnemyChams = Color3.fromRGB(180, 30, 30),
+    FriendlyChams = Color3.fromRGB(30, 180, 30),
+    EnemySkeleton = Color3.fromRGB(255, 200, 0),
+    FriendlySkeleton= Color3.fromRGB(0, 200, 255),
+    HealthHigh = Color3.fromRGB(0, 255, 80),
+    HealthLow = Color3.fromRGB(255, 60, 60),
+    NameEnemy = Color3.fromRGB(255, 100, 100),
+    NameFriendly = Color3.fromRGB(100, 255, 100),
+    NameGeneric = Color3.fromRGB(255, 255, 255),
+    DistEnemy = Color3.fromRGB(220, 220, 220),
+    DistFriendly = Color3.fromRGB(220, 220, 220),
+    DistGeneric = Color3.fromRGB(220, 220, 220),
+}
+
+
+-- Fonction de construction du thème complet
+local function BuildTheme()
+    return {
+        enemy = {
+            Box = {
+                Outline = { Visible = Color3.new(0,0,0), Invisible = Color3.new(0,0,0) },
+                Fill = { Visible = Colors.EnemyBox, Invisible = Color3.fromRGB(255,60,60) },
+            },
+            Tracer = { Visible = Colors.EnemyTracer, Invisible = Color3.fromRGB(255,60,60) },
+            Skeleton = { Visible = Colors.EnemySkeleton, Invisible = Colors.EnemySkeleton },
+            Name = { Visible = Colors.NameEnemy, Invisible = Colors.NameEnemy },
+            Distance = { Visible = Colors.DistEnemy, Invisible = Colors.DistEnemy },
+            HealthBar = {
+                Bar = { Visible = Color3.new(1,1,1), Invisible = Color3.new(1,1,1) },
+                Text = { Visible = Color3.new(1,1,1), Invisible = Color3.new(1,1,1) },
+            },
+            Chams = {
+                Outline = { Visible = Color3.new(0,0,0), Invisible = Color3.new(0,0,0) },
+                Fill = { Visible = Colors.EnemyChams, Invisible = Colors.EnemyChams },
+            },
+        },
+        friendly = {
+            Box = {
+                Outline = { Visible = Color3.new(0,0,0), Invisible = Color3.new(0,0,0) },
+                Fill = { Visible = Colors.FriendlyBox, Invisible = Color3.fromRGB(60,220,60) },
+            },
+            Tracer = { Visible = Colors.FriendlyTracer, Invisible = Color3.fromRGB(60,220,60) },
+            Skeleton = { Visible = Colors.FriendlySkeleton, Invisible = Colors.FriendlySkeleton },
+            Name = { Visible = Colors.NameFriendly, Invisible = Colors.NameFriendly },
+            Distance = { Visible = Colors.DistFriendly, Invisible = Colors.DistFriendly },
+            HealthBar = {
+                Bar = { Visible = Color3.new(1,1,1), Invisible = Color3.new(1,1,1) },
+                Text = { Visible = Color3.new(1,1,1), Invisible = Color3.new(1,1,1) },
+            },
+            Chams = {
+                Outline = { Visible = Color3.new(0,0,0), Invisible = Color3.new(0,0,0) },
+                Fill = { Visible = Colors.FriendlyChams, Invisible = Colors.FriendlyChams },
+            },
+        },
+        generic = {
+            Box = {
+                Outline = { Visible = Color3.new(0,0,0), Invisible = Color3.new(0,0,0) },
+                Fill = { Visible = Colors.GenericBox, Invisible = Colors.GenericBox },
+            },
+            Tracer = { Visible = Colors.GenericTracer, Invisible = Colors.GenericTracer },
+            Skeleton = { Visible = Color3.fromRGB(255,200,0), Invisible = Color3.fromRGB(255,200,0) },
+            Name = { Visible = Colors.NameGeneric, Invisible = Colors.NameGeneric },
+            Distance = { Visible = Colors.DistGeneric, Invisible = Colors.DistGeneric },
+            HealthBar = {
+                Bar = { Visible = Color3.new(1,1,1), Invisible = Color3.new(1,1,1) },
+                Text = { Visible = Color3.new(1,1,1), Invisible = Color3.new(1,1,1) },
+            },
+            Chams = {
+                Outline = { Visible = Color3.new(0,0,0), Invisible = Color3.new(0,0,0) },
+                Fill = { Visible = Color3.fromRGB(180,180,30), Invisible = Color3.fromRGB(180,180,30) },
+            },
+        },
+    }
+end
+
+
+-- Application initiale
+local function ApplyTwilightSettings(s)
+    Twilight:SetOptions(s)
+end
+
+
+-- State ESP global
+local ESPState = {
+    Enabled = false,
+    TeamChecks = false,
+    VisibilityChecks= false,
+    OnlyVisible = false,
+    Recolor = true,
+
+
+    Box = false,
+    BoxStyle = Twilight.Enums.BoxStyle.Normal,
+    BoxFilled = false,
+    BoxFillTrans = 0.6,
+    BoxThickness = 1,
+
+
+    Tracer = false,
+    TracerEnemy = true,
+    TracerFriendly = false,
+    TracerGeneric = true,
+    TracerOrigin = Twilight.Enums.TracerOrigin.Viewports.Bottom,
+    TracerStyle = Twilight.Enums.TracerStyle.Line,
+    TracerThickness = 1,
+
+
+    Healthbar = false,
+    HealthbarBar = true,
+    HealthbarText = false,
+    HealthbarPos = Twilight.Enums.HealthBarPosition.Left,
+    HealthSource = Twilight.Enums.HealthSource.Humanoid,
+
+
+    Name = false,
+    NameEnemy = true,
+    NameFriendly = true,
+    NameGeneric = true,
+    NameStyle = Twilight.Enums.NameStyle.DisplayName,
+
+
+    Distance = false,
+    DistEnemy = true,
+    DistFriendly = true,
+    DistGeneric = true,
+    DistUnit = Twilight.Enums.DistanceUnit.Meters,
+
+
+    Chams = false,
+    ChamsEnemy = true,
+    ChamsFriendly = true,
+    ChamsGeneric = true,
+    ChamsOcclusion = false,
+    ChamsOutline = true,
+    ChamsOutlineThick = 0.1,
+    ChamsOutlineTrans = 0,
+    ChamsFillTrans = 0.5,
+
+
+    Skeleton = false,
+    SkelEnemy = true,
+    SkelFriendly = true,
+    SkelGeneric = true,
+    SkelThickness = 1,
+    SkelTransp = 0,
+
+
+    Radar = false,
+    RadarRadius = 100,
+    RadarScale = 1,
+
+
+    TextSize = 14,
+    MaxDistance = 2000,
+    RefreshRate = 1 / 120,
+}
+
+
+-- Recompile et push les settings à Twilight
+local function PushESP()
+    Twilight:SetOptions({
+        Enabled = ESPState.Enabled,
+        ObjectsEnabled = false,
+
+
+        Checks = {
+            Visible = {
+                Enabled = ESPState.VisibilityChecks,
+                OnlyVisible= ESPState.OnlyVisible,
+                Recolor = ESPState.Recolor,
+            },
+            Team = {
+                Enabled = ESPState.TeamChecks,
+                SelectedTeams = {
+                    enemy = true,
+                    friendly = not ESPState.TeamChecks,
+                    generic = true,
+                    ["local"]= false,
+                },
+            },
+        },
+
+
+        currentColors = BuildTheme(),
+
+
+        HealthBar = {
+            Enabled = {
+                enemy = ESPState.Healthbar,
+                friendly = ESPState.Healthbar,
+                generic = ESPState.Healthbar,
+                ["local"]= false,
+            },
+            Source = ESPState.HealthSource,
+            Bar = ESPState.HealthbarBar,
+            Text = ESPState.HealthbarText,
+            Position = ESPState.HealthbarPos,
+            Suffix = "HP",
+        },
+
+
+        Box = {
+            Style = ESPState.BoxStyle,
+            Enabled = ESPState.Box,
+            Filled = {
+                Enabled = ESPState.BoxFilled,
+                Transparency = ESPState.BoxFillTrans,
+            },
+            Thickness = ESPState.BoxThickness,
+        },
+
+
+        Tracer = {
+            Enabled = {
+                enemy = ESPState.Tracer and ESPState.TracerEnemy,
+                friendly = ESPState.Tracer and ESPState.TracerFriendly,
+                generic = ESPState.Tracer and ESPState.TracerGeneric,
+            },
+            Origin = ESPState.TracerOrigin,
+            Style = ESPState.TracerStyle,
+            Thickness = ESPState.TracerThickness,
+        },
+
+
+        Name = {
+            Enabled = {
+                enemy = ESPState.Name and ESPState.NameEnemy,
+                friendly = ESPState.Name and ESPState.NameFriendly,
+                generic = ESPState.Name and ESPState.NameGeneric,
+                ["local"]= false,
+            },
+            Style = ESPState.NameStyle,
+        },
+
+
+        Distance = {
+            Enabled = {
+                enemy = ESPState.Distance and ESPState.DistEnemy,
+                friendly = ESPState.Distance and ESPState.DistFriendly,
+                generic = ESPState.Distance and ESPState.DistGeneric,
+                ["local"]= false,
+            },
+            DistanceUnit = ESPState.DistUnit,
+        },
+
+
+        Chams = {
+            Enabled = {
+                enemy = ESPState.Chams and ESPState.ChamsEnemy,
+                friendly = ESPState.Chams and ESPState.ChamsFriendly,
+                generic = ESPState.Chams and ESPState.ChamsGeneric,
+                ["local"]= false,
+            },
+            Outline = {
+                Enabled = ESPState.ChamsOutline,
+                Thickness = ESPState.ChamsOutlineThick,
+                Transparency = ESPState.ChamsOutlineTrans,
+            },
+            Fill = {
+                Enabled = true,
+                Transparency = ESPState.ChamsFillTrans,
+            },
+            Occlusion = ESPState.ChamsOcclusion,
+        },
+
+
+        Skeleton = {
+            Enabled = {
+                enemy = ESPState.Skeleton and ESPState.SkelEnemy,
+                friendly = ESPState.Skeleton and ESPState.SkelFriendly,
+                generic = ESPState.Skeleton and ESPState.SkelGeneric,
+                ["local"]= false,
+            },
+            Thickness = ESPState.SkelThickness,
+            Transparency = ESPState.SkelTransp,
+        },
+
+
+        Radar = {
+            Enabled = ESPState.Radar,
+            Position = Vector2.new(Camera.ViewportSize.X - 130, 130),
+            Radius = ESPState.RadarRadius,
+            Scale = ESPState.RadarScale,
+        },
+
+
+        TextSize = ESPState.TextSize,
+        MaxDistance = ESPState.MaxDistance,
+        RefreshRate = ESPState.RefreshRate,
+    })
+end
+
+
+-- ══════════════════════════════════════════════════════════════
+-- ONGLET ESP — STARLIGHT UI
+-- ══════════════════════════════════════════════════════════════
+
+
+local GbESPMain = TabESP:CreateGroupbox({ Name = "Principal", Side = "Left" })
+local GbESPBox = TabESP:CreateGroupbox({ Name = "Box", Side = "Right" })
+local GbESPTracer = TabESP:CreateGroupbox({ Name = "Traceur", Side = "Left" })
+local GbESPInfo = TabESP:CreateGroupbox({ Name = "Infos Joueur", Side = "Right" })
+local GbESPChams = TabESP:CreateGroupbox({ Name = "Chams", Side = "Left" })
+local GbESPSkel = TabESP:CreateGroupbox({ Name = "Squelette", Side = "Right" })
+local GbESPMisc = TabESP:CreateGroupbox({ Name = "Misc / Radar", Side = "Left" })
+local GbESPColors = TabESP:CreateGroupbox({ Name = "Couleurs", Side = "Right" })
+
+
+-- ────────────────────────────────────────
+-- PRINCIPAL
+-- ────────────────────────────────────────
+
+
+GbESPMain:CreateToggle({ Name = "Activer l'ESP", CurrentValue = false, Flag = "ESP_Main",
+    Callback = function(v) ESPState.Enabled = v PushESP() end })
+
+
+GbESPMain:CreateToggle({ Name = "Team Check (cacher alliés)", CurrentValue = false, Flag = "ESP_TeamCheck",
+    Callback = function(v) ESPState.TeamChecks = v PushESP() end })
+
+
+GbESPMain:CreateToggle({ Name = "Vérif. Visibilité", CurrentValue = false, Flag = "ESP_VisCheck",
+    Callback = function(v) ESPState.VisibilityChecks = v PushESP() end })
+
+
+GbESPMain:CreateToggle({ Name = "Seulement si visible", CurrentValue = false, Flag = "ESP_OnlyVis",
+    Callback = function(v) ESPState.OnlyVisible = v PushESP() end })
+
+
+GbESPMain:CreateToggle({ Name = "Recoloration Visible/Invisible", CurrentValue = true, Flag = "ESP_Recolor",
+    Callback = function(v) ESPState.Recolor = v PushESP() end })
+
+
+GbESPMain:CreateSlider({ Name = "Distance Max", Range = {50, 5000}, Increment = 50,
+    CurrentValue = 2000, Suffix = "m", Flag = "ESP_MaxDist",
+    Callback = function(v) ESPState.MaxDistance = v PushESP() end })
+
+
+GbESPMain:CreateSlider({ Name = "Taille Texte", Range = {8, 24}, Increment = 1,
+    CurrentValue = 14, Flag = "ESP_TextSize",
+    Callback = function(v) ESPState.TextSize = v PushESP() end })
+
+
+GbESPMain:CreateSlider({ Name = "Refresh Rate (FPS)", Range = {15, 360}, Increment = 1,
+    CurrentValue = 120, Suffix = "fps", Flag = "ESP_RefreshRate",
+    Callback = function(v) ESPState.RefreshRate = 1/v PushESP() end })
+
+
+-- ────────────────────────────────────────
+-- BOX
+-- ────────────────────────────────────────
+
+
+GbESPBox:CreateToggle({ Name = "Activer Box", CurrentValue = false, Flag = "ESP_Box",
+    Callback = function(v) ESPState.Box = v PushESP() end })
+
+
+GbESPBox:CreateDropdown({ Name = "Style Box",
+    Options = {"Normal", "Corner", "3D", "Quad"},
+    CurrentOption = {"Normal"}, Flag = "ESP_BoxStyle",
+    Callback = function(v)
+        local map = {
+            Normal = Twilight.Enums.BoxStyle.Normal,
+            Corner = Twilight.Enums.BoxStyle.CornerBoxes,
+            ["3D"] = Twilight.Enums.BoxStyle["3D"],
+            Quad = Twilight.Enums.BoxStyle.Quad,
+        }
+        ESPState.BoxStyle = map[v[1]] or Twilight.Enums.BoxStyle.Normal
+        PushESP()
+    end })
+
+
+GbESPBox:CreateToggle({ Name = "Box Remplie", CurrentValue = false, Flag = "ESP_BoxFilled",
+    Callback = function(v) ESPState.BoxFilled = v PushESP() end })
+
+
+GbESPBox:CreateSlider({ Name = "Transparence Fill", Range = {0, 1}, Increment = 0.05,
+    CurrentValue = 0.6, Flag = "ESP_BoxFillTrans",
+    Callback = function(v) ESPState.BoxFillTrans = v PushESP() end })
+
+
+GbESPBox:CreateSlider({ Name = "Épaisseur", Range = {1, 6}, Increment = 0.5,
+    CurrentValue = 1, Flag = "ESP_BoxThick",
+    Callback = function(v) ESPState.BoxThickness = v PushESP() end })
+
+
+-- ────────────────────────────────────────
+-- TRACEUR
+-- ────────────────────────────────────────
+
+
+GbESPTracer:CreateToggle({ Name = "Activer Traceurs", CurrentValue = false, Flag = "ESP_Tracer",
+    Callback = function(v) ESPState.Tracer = v PushESP() end })
+
+
+GbESPTracer:CreateToggle({ Name = "Traceurs Ennemis", CurrentValue = true, Flag = "ESP_TracerEnemy",
+    Callback = function(v) ESPState.TracerEnemy = v PushESP() end })
+
+
+GbESPTracer:CreateToggle({ Name = "Traceurs Alliés", CurrentValue = false, Flag = "ESP_TracerFriend",
+    Callback = function(v) ESPState.TracerFriendly = v PushESP() end })
+
+
+GbESPTracer:CreateToggle({ Name = "Traceurs Génériques", CurrentValue = true, Flag = "ESP_TracerGeneric",
+    Callback = function(v) ESPState.TracerGeneric = v PushESP() end })
+
+
+GbESPTracer:CreateDropdown({ Name = "Origine",
+    Options = {"Bas", "Milieu", "Haut", "Souris", "Humanoid Local"},
+    CurrentOption = {"Bas"}, Flag = "ESP_TracerOrigin",
+    Callback = function(v)
+        local map = {
+            ["Bas"] = Twilight.Enums.TracerOrigin.Viewports.Bottom,
+            ["Milieu"] = Twilight.Enums.TracerOrigin.Viewports.Middle,
+            ["Haut"] = Twilight.Enums.TracerOrigin.Viewports.Top,
+            ["Souris"] = Twilight.Enums.TracerOrigin.Mouse,
+            ["Humanoid Local"] = Twilight.Enums.TracerOrigin.LocalHumanoid,
+        }
+        ESPState.TracerOrigin = map[v[1]] or Twilight.Enums.TracerOrigin.Viewports.Bottom
+        PushESP()
+    end })
+
+
+GbESPTracer:CreateDropdown({ Name = "Style Traceur",
+    Options = {"Line", "Arrow"},
+    CurrentOption = {"Line"}, Flag = "ESP_TracerStyle",
+    Callback = function(v)
+        ESPState.TracerStyle = (v[1] == "Arrow")
+            and Twilight.Enums.TracerStyle.Arrow
+            or Twilight.Enums.TracerStyle.Line
+        PushESP()
+    end })
+
+
+GbESPTracer:CreateSlider({ Name = "Épaisseur Traceur", Range = {1, 5}, Increment = 0.5,
+    CurrentValue = 1, Flag = "ESP_TracerThick",
+    Callback = function(v) ESPState.TracerThickness = v PushESP() end })
+
+
+-- ────────────────────────────────────────
+-- INFOS JOUEUR (Nom, Distance, HP)
+-- ────────────────────────────────────────
+
+
+GbESPInfo:CreateSection("Noms")
+
+
+GbESPInfo:CreateToggle({ Name = "Noms Actifs", CurrentValue = false, Flag = "ESP_Name",
+    Callback = function(v) ESPState.Name = v PushESP() end })
+
+
+GbESPInfo:CreateToggle({ Name = "Noms Ennemis", CurrentValue = true, Flag = "ESP_NameEnemy",
+    Callback = function(v) ESPState.NameEnemy = v PushESP() end })
+
+
+GbESPInfo:CreateToggle({ Name = "Noms Alliés", CurrentValue = true, Flag = "ESP_NameFriend",
+    Callback = function(v) ESPState.NameFriendly = v PushESP() end })
+
+
+GbESPInfo:CreateDropdown({ Name = "Style Nom",
+    Options = {"DisplayName", "Username", "Both"},
+    CurrentOption = {"DisplayName"}, Flag = "ESP_NameStyle",
+    Callback = function(v)
+        local map = {
+            DisplayName = Twilight.Enums.NameStyle.DisplayName,
+            Username = Twilight.Enums.NameStyle.Username,
+            Both = Twilight.Enums.NameStyle.Both,
+        }
+        ESPState.NameStyle = map[v[1]] or Twilight.Enums.NameStyle.DisplayName
+        PushESP()
+    end })
+
+
+GbESPInfo:CreateSection("Distance")
+
+
+GbESPInfo:CreateToggle({ Name = "Distance Active", CurrentValue = false, Flag = "ESP_Dist",
+    Callback = function(v) ESPState.Distance = v PushESP() end })
+
+
+GbESPInfo:CreateToggle({ Name = "Distance Ennemis", CurrentValue = true, Flag = "ESP_DistEnemy",
+    Callback = function(v) ESPState.DistEnemy = v PushESP() end })
+
+
+GbESPInfo:CreateToggle({ Name = "Distance Alliés", CurrentValue = true, Flag = "ESP_DistFriend",
+    Callback = function(v) ESPState.DistFriendly = v PushESP() end })
+
+
+GbESPInfo:CreateDropdown({ Name = "Unité Distance",
+    Options = {"Studs", "Metres", "Feet"},
+    CurrentOption = {"Metres"}, Flag = "ESP_DistUnit",
+    Callback = function(v)
+        local map = {
+            Studs = Twilight.Enums.DistanceUnit.Studs,
+            Metres = Twilight.Enums.DistanceUnit.Meters,
+            Feet = Twilight.Enums.DistanceUnit.Feet,
+        }
+        ESPState.DistUnit = map[v[1]] or Twilight.Enums.DistanceUnit.Meters
+        PushESP()
+    end })
+
+
+GbESPInfo:CreateSection("Barre de Vie")
+
+
+GbESPInfo:CreateToggle({ Name = "Healthbar Active", CurrentValue = false, Flag = "ESP_HP",
+    Callback = function(v) ESPState.Healthbar = v PushESP() end })
+
+
+GbESPInfo:CreateToggle({ Name = "Afficher Barre", CurrentValue = true, Flag = "ESP_HPBar",
+    Callback = function(v) ESPState.HealthbarBar = v PushESP() end })
+
+
+GbESPInfo:CreateToggle({ Name = "Afficher Texte HP", CurrentValue = false, Flag = "ESP_HPText",
+    Callback = function(v) ESPState.HealthbarText = v PushESP() end })
+
+
+GbESPInfo:CreateDropdown({ Name = "Position HP",
+    Options = {"Gauche", "Droite", "Dessus", "Dessous"},
+    CurrentOption = {"Gauche"}, Flag = "ESP_HPPos",
+    Callback = function(v)
+        local map = {
+            Gauche = Twilight.Enums.HealthBarPosition.Left,
+            Droite = Twilight.Enums.HealthBarPosition.Right,
+            Dessus = Twilight.Enums.HealthBarPosition.Top,
+            Dessous = Twilight.Enums.HealthBarPosition.Bottom,
+        }
+        ESPState.HealthbarPos = map[v[1]] or Twilight.Enums.HealthBarPosition.Left
+        PushESP()
+    end })
+
+
+GbESPInfo:CreateDropdown({ Name = "Source HP",
+    Options = {"Humanoid", "Attribute"},
+    CurrentOption = {"Humanoid"}, Flag = "ESP_HPSource",
+    Callback = function(v)
+        ESPState.HealthSource = (v[1] == "Attribute")
+            and Twilight.Enums.HealthSource.Attribute
+            or Twilight.Enums.HealthSource.Humanoid
+        PushESP()
+    end })
+
+
+-- ────────────────────────────────────────
+-- CHAMS
+-- ────────────────────────────────────────
+
+
+GbESPChams:CreateToggle({ Name = "Activer Chams", CurrentValue = false, Flag = "ESP_Chams",
+    Callback = function(v) ESPState.Chams = v PushESP() end })
+
+
+GbESPChams:CreateToggle({ Name = "Chams Ennemis", CurrentValue = true, Flag = "ESP_ChamsEnemy",
+    Callback = function(v) ESPState.ChamsEnemy = v PushESP() end })
+
+
+GbESPChams:CreateToggle({ Name = "Chams Alliés", CurrentValue = true, Flag = "ESP_ChamsFriend",
+    Callback = function(v) ESPState.ChamsFriendly = v PushESP() end })
+
+
+GbESPChams:CreateToggle({ Name = "Chams Génériques", CurrentValue = true, Flag = "ESP_ChamsGeneric",
+    Callback = function(v) ESPState.ChamsGeneric = v PushESP() end })
+
+
+GbESPChams:CreateToggle({ Name = "Occlusion (masqué par murs)", CurrentValue = false, Flag = "ESP_ChamsOcc",
+    Callback = function(v) ESPState.ChamsOcclusion = v PushESP() end })
+
+
+GbESPChams:CreateToggle({ Name = "Outline Chams", CurrentValue = true, Flag = "ESP_ChamsOutline",
+    Callback = function(v) ESPState.ChamsOutline = v PushESP() end })
+
+
+GbESPChams:CreateSlider({ Name = "Transparence Fill Chams", Range = {0, 1}, Increment = 0.05,
+    CurrentValue = 0.5, Flag = "ESP_ChamsFillTrans",
+    Callback = function(v) ESPState.ChamsFillTrans = v PushESP() end })
+
+
+GbESPChams:CreateSlider({ Name = "Transparence Outline", Range = {0, 1}, Increment = 0.05,
+    CurrentValue = 0, Flag = "ESP_ChamsOutlineTrans",
+    Callback = function(v) ESPState.ChamsOutlineTrans = v PushESP() end })
+
+
+GbESPChams:CreateSlider({ Name = "Épaisseur Outline", Range = {0, 1}, Increment = 0.05,
+    CurrentValue = 0.1, Flag = "ESP_ChamsOutlineThick",
+    Callback = function(v) ESPState.ChamsOutlineThick = v PushESP() end })
+
+
+-- ────────────────────────────────────────
+-- SQUELETTE
+-- ────────────────────────────────────────
+
+
+GbESPSkel:CreateToggle({ Name = "Activer Squelette", CurrentValue = false, Flag = "ESP_Skel",
+    Callback = function(v) ESPState.Skeleton = v PushESP() end })
+
+
+GbESPSkel:CreateToggle({ Name = "Squelette Ennemis", CurrentValue = true, Flag = "ESP_SkelEnemy",
+    Callback = function(v) ESPState.SkelEnemy = v PushESP() end })
+
+
+GbESPSkel:CreateToggle({ Name = "Squelette Alliés", CurrentValue = true, Flag = "ESP_SkelFriend",
+    Callback = function(v) ESPState.SkelFriendly = v PushESP() end })
+
+
+GbESPSkel:CreateToggle({ Name = "Squelette Génériques", CurrentValue = true, Flag = "ESP_SkelGeneric",
+    Callback = function(v) ESPState.SkelGeneric = v PushESP() end })
+
+
+GbESPSkel:CreateSlider({ Name = "Épaisseur Squelette", Range = {1, 5}, Increment = 0.5,
+    CurrentValue = 1, Flag = "ESP_SkelThick",
+    Callback = function(v) ESPState.SkelThickness = v PushESP() end })
+
+
+GbESPSkel:CreateSlider({ Name = "Transparence Squelette", Range = {0, 1}, Increment = 0.05,
+    CurrentValue = 0, Flag = "ESP_SkelTransp",
+    Callback = function(v) ESPState.SkelTransp = v PushESP() end })
+
+
+-- ────────────────────────────────────────
+-- RADAR + MISC
+-- ────────────────────────────────────────
+
+
+GbESPMisc:CreateToggle({ Name = "Activer Radar", CurrentValue = false, Flag = "ESP_Radar",
+    Callback = function(v) ESPState.Radar = v PushESP() end })
+
+
+GbESPMisc:CreateSlider({ Name = "Taille Radar", Range = {50, 300}, Increment = 5,
+    CurrentValue = 100, Flag = "ESP_RadarRadius",
+    Callback = function(v) ESPState.RadarRadius = v PushESP() end })
+
+
+GbESPMisc:CreateSlider({ Name = "Échelle Radar", Range = {0.5, 5}, Increment = 0.1,
+    CurrentValue = 1, Flag = "ESP_RadarScale",
+    Callback = function(v) ESPState.RadarScale = v PushESP() end })
+
+
+-- ────────────────────────────────────────
+-- COULEURS (Color pickers Starlight)
+-- ────────────────────────────────────────
+
+
+GbESPColors:CreateColorpicker({ Name = "Box Ennemi", Default = Color3.fromRGB(255,60,60), Flag = "C_EnemyBox",
+    Callback = function(v) Colors.EnemyBox = v PushESP() end })
+GbESPColors:CreateColorpicker({ Name = "Box Allié", Default = Color3.fromRGB(60,220,60), Flag = "C_FriendBox",
+    Callback = function(v) Colors.FriendlyBox = v PushESP() end })
+GbESPColors:CreateColorpicker({ Name = "Box Générique", Default = Color3.fromRGB(255,255,255), Flag = "C_GenBox",
+    Callback = function(v) Colors.GenericBox = v PushESP() end })
+GbESPColors:CreateColorpicker({ Name = "Traceur Ennemi", Default = Color3.fromRGB(255,60,60), Flag = "C_EnemyTracer",
+    Callback = function(v) Colors.EnemyTracer = v PushESP() end })
+GbESPColors:CreateColorpicker({ Name = "Traceur Allié", Default = Color3.fromRGB(60,220,60), Flag = "C_FriendTracer",
+    Callback = function(v) Colors.FriendlyTracer = v PushESP() end })
+GbESPColors:CreateColorpicker({ Name = "Chams Ennemi", Default = Color3.fromRGB(180,30,30), Flag = "C_EnemyChams",
+    Callback = function(v) Colors.EnemyChams = v PushESP() end })
+GbESPColors:CreateColorpicker({ Name = "Chams Allié", Default = Color3.fromRGB(30,180,30), Flag = "C_FriendChams",
+    Callback = function(v) Colors.FriendlyChams = v PushESP() end })
+GbESPColors:CreateColorpicker({ Name = "Squelette Ennemi",Default = Color3.fromRGB(255,200,0), Flag = "C_EnemySkel",
+    Callback = function(v) Colors.EnemySkeleton = v PushESP() end })
+GbESPColors:CreateColorpicker({ Name = "Squelette Allié", Default = Color3.fromRGB(0,200,255), Flag = "C_FriendSkel",
+    Callback = function(v) Colors.FriendlySkeleton = v PushESP() end })
+
+
+-- ══════════════════════════════════════════════════════════════
+-- ONGLET PLAYER
+-- ══════════════════════════════════════════════════════════════
+
+
+local GbMove = TabPlayer:CreateGroupbox({ Name = "Mouvements", Side = "Left" })
+local GbFly = TabPlayer:CreateGroupbox({ Name = "Fly", Side = "Right" })
+local GbCombat = TabPlayer:CreateGroupbox({ Name = "Combat", Side = "Left" })
+
+
+-- Speed
+GbMove:CreateSlider({ Name = "WalkSpeed", Range = {1, 500}, Increment = 1,
+    CurrentValue = 16, Suffix = " sps", Flag = "WalkSpeed",
+    Callback = function(v)
+        if LocalPlayer.Character then
+            local h = LocalPlayer.Character:FindFirstChild("Humanoid")
+            if h then h.WalkSpeed = v end
+        end
+    end })
+
+
+-- Jump
+GbMove:CreateSlider({ Name = "JumpPower", Range = {1, 500}, Increment = 1,
+    CurrentValue = 50, Flag = "JumpPower",
+    Callback = function(v)
+        if LocalPlayer.Character then
+            local h = LocalPlayer.Character:FindFirstChild("Humanoid")
+            if h then h.JumpPower = v end
+        end
+    end })
+
+
+-- Infinite Jump
+local InfJump = false
+GbMove:CreateToggle({ Name = "Infinite Jump", CurrentValue = false, Flag = "InfJump",
+    Callback = function(v) InfJump = v end })
+UserInputService.JumpRequest:Connect(function()
+    if InfJump and LocalPlayer.Character then
+        local h = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+
+-- Noclip
+local Noclip = false
+GbMove:CreateToggle({ Name = "Noclip", CurrentValue = false, Flag = "Noclip",
+    Callback = function(v) Noclip = v end })
+RunService.Stepped:Connect(function()
+    if Noclip and LocalPlayer.Character then
+        for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = false end
+        end
+    end
+end)
+
+
+-- Fly
+local Flying, FlyBV, FlyBG = false, nil, nil
+local FlySpeed = 60
+
+
+local function StartFly()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    FlyBV = Instance.new("BodyVelocity")
+    FlyBV.MaxForce = Vector3.new(1e9,1e9,1e9)
+    FlyBV.Velocity = Vector3.zero
+    FlyBV.Parent = hrp
+    FlyBG = Instance.new("BodyGyro")
+    FlyBG.MaxTorque = Vector3.new(1e9,1e9,1e9)
+    FlyBG.D = 200
+    FlyBG.Parent = hrp
+end
+
+
+local function StopFly()
+    if FlyBV then FlyBV:Destroy() FlyBV = nil end
+    if FlyBG then FlyBG:Destroy() FlyBG = nil end
+end
+
+
+GbFly:CreateToggle({ Name = "Fly", CurrentValue = false, Flag = "Fly",
+    Callback = function(v)
+        Flying = v
+        if v then StartFly() else StopFly() end
+    end })
+
+
+GbFly:CreateSlider({ Name = "Vitesse", Range = {10, 500}, Increment = 5,
+    CurrentValue = 60, Flag = "FlySpeed",
+    Callback = function(v) FlySpeed = v end })
+
+
+RunService.RenderStepped:Connect(function()
+    if Flying and FlyBV then
+        local cam = Camera.CFrame
+        local v = Vector3.zero
+        local UIS = UserInputService
+        if UIS:IsKeyDown(Enum.KeyCode.W) then v = v + cam.LookVector * FlySpeed end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then v = v - cam.LookVector * FlySpeed end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then v = v - cam.RightVector * FlySpeed end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then v = v + cam.RightVector * FlySpeed end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then v = v + Vector3.yAxis * FlySpeed end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then v = v - Vector3.yAxis * FlySpeed end
+        FlyBV.Velocity = v
+    end
+end)
+
+
+-- Combat
+local AimAssist, AimFOV, AimSmooth = false, 80, 0.15
+
+
+GbCombat:CreateToggle({ Name = "Aim Assist", CurrentValue = false, Flag = "AimAssist",
+    Callback = function(v) AimAssist = v end })
+GbCombat:CreateSlider({ Name = "FOV", Range = {10, 400}, Increment = 5,
+    CurrentValue = 80, Flag = "AimFOV", Callback = function(v) AimFOV = v end })
+GbCombat:CreateSlider({ Name = "Smoothness", Range = {0.01,1}, Increment = 0.01,
+    CurrentValue = 0.15, Flag = "AimSmooth", Callback = function(v) AimSmooth = v end })
+
+
+local function GetClosestTarget()
+    local vc = Camera.ViewportSize / 2
+    local closest, minD = nil, AimFOV
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl == LocalPlayer or not pl.Character then continue end
+        local head = pl.Character:FindFirstChild("Head")
+        if not head then continue end
+        local sp, on = Camera:WorldToViewportPoint(head.Position)
+        if on then
+            local d = (Vector2.new(sp.X, sp.Y) - vc).Magnitude
+            if d < minD then minD = d closest = pl end
+        end
+    end
+    return closest
+end
+
+
+RunService.RenderStepped:Connect(function()
+    if AimAssist and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        local t = GetClosestTarget()
+        if t and t.Character then
+            local head = t.Character:FindFirstChild("Head")
+            if head then
+                local sp = Camera:WorldToViewportPoint(head.Position)
+                local vc = Camera.ViewportSize
+                mousemoverel(
+                    (sp.X - vc.X/2) * AimSmooth,
+                    (sp.Y - vc.Y/2) * AimSmooth
+                )
+            end
+        end
+    end
+end)
+
+
+-- ══════════════════════════════════════════════════════════════
+-- ONGLET VISUALS
+-- ══════════════════════════════════════════════════════════════
+
+
+local GbEnv = TabVisuals:CreateGroupbox({ Name = "Environnement", Side = "Left" })
+local GbCam = TabVisuals:CreateGroupbox({ Name = "Caméra", Side = "Right" })
+
+
+GbEnv:CreateToggle({ Name = "Fullbright", CurrentValue = false, Flag = "Fullbright",
+    Callback = function(v)
+        Lighting.Brightness = v and 10 or 1
+        Lighting.GlobalShadows = not v
+        Lighting.FogEnd = v and 1e9 or 100000
+    end })
+
+
+GbEnv:CreateToggle({ Name = "No Fog", CurrentValue = false, Flag = "NoFog",
+    Callback = function(v) Lighting.FogEnd = v and 1e9 or 100000 end })
+
+
+GbEnv:CreateSlider({ Name = "Luminosité", Range = {0,10}, Increment = 0.1,
+    CurrentValue = 1, Flag = "Brightness",
+    Callback = function(v) Lighting.Brightness = v end })
+
+
+GbEnv:CreateSlider({ Name = "Heure", Range = {0,24}, Increment = 0.1,
+    CurrentValue = 14, Suffix = "h", Flag = "TimeOfDay",
+    Callback = function(v) Lighting.ClockTime = v end })
+
+
+GbEnv:CreateColorpicker({ Name = "Ambiance", Default = Color3.fromRGB(128,128,128), Flag = "AmbientColor",
+    Callback = function(v) Lighting.Ambient = v end })
+
+
+GbCam:CreateSlider({ Name = "FOV", Range = {50,130}, Increment = 1,
+    CurrentValue = 70, Suffix = "°", Flag = "CamFOV",
+    Callback = function(v) Camera.FieldOfView = v end })
+
+
+GbCam:CreateSlider({ Name = "Zoom Max", Range = {10,1000}, Increment = 10,
+    CurrentValue = 400, Flag = "ZoomMax",
+    Callback = function(v) LocalPlayer.CameraMaxZoomDistance = v end })
+
+
+-- ══════════════════════════════════════════════════════════════
+-- ONGLET WORLD
+-- ══════════════════════════════════════════════════════════════
+
+
+local GbWorld = TabWorld:CreateGroupbox({ Name = "Monde", Side = "Left" })
+
+
+GbWorld:CreateSlider({ Name = "Gravité", Range = {0,300}, Increment = 1,
+    CurrentValue = 196, Flag = "Gravity",
+    Callback = function(v) Workspace.Gravity = v end })
+
+
+GbWorld:CreateToggle({ Name = "Anti-Void", CurrentValue = false, Flag = "AntiVoid",
+    Callback = function(v)
+        if v then
+            RunService.Heartbeat:Connect(function()
+                if LocalPlayer.Character then
+                    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and hrp.Position.Y < -100 then
+                        hrp.CFrame = CFrame.new(0, 50, 0)
+                    end
+                end
+            end)
+        end
+    end })
+
+
+GbWorld:CreateButton({ Name = "Respawn", Callback = function()
+    LocalPlayer:LoadCharacter()
+end })
+
+
+-- ══════════════════════════════════════════════════════════════
+-- ONGLET SETTINGS
+-- ══════════════════════════════════════════════════════════════
+
+
+local GbCfg = TabSettings:CreateGroupbox({ Name = "Configuration", Side = "Left" })
+
+
+GbCfg:CreateButton({ Name = "💾 Sauvegarder", Callback = function()
+    Starlight:SaveConfiguration()
+    Starlight:Notify({ Title = "Sauvegardé !", Content = "Config sauvegardée.", Duration = 3 })
+end })
+
+
+GbCfg:CreateButton({ Name = "📂 Charger", Callback = function()
+    Starlight:LoadConfiguration()
+    Starlight:Notify({ Title = "Chargé !", Content = "Config chargée.", Duration = 3 })
+end })
+
+
+GbCfg:CreateButton({ Name = "🔄 Reset", Callback = function()
+    Starlight:DestroyConfiguration()
+    Starlight:Notify({ Title = "Reset", Content = "Config réinitialisée.", Duration = 3 })
+end })
+
+
+GbCfg:CreateButton({ Name = "🗑️ Décharger ESP", Callback = function()
+    Twilight:Unload()
+    Starlight:Notify({ Title = "Twilight Unloaded", Content = "ESP détruit.", Duration = 3 })
+end })
+
+
+-- ══════════════════════════════════════════
+-- NOTIFICATION DÉMARRAGE
+-- ══════════════════════════════════════════
+
+
+Starlight:Notify({
+    Title = "✅ Universal Script",
+    Content = "Twilight ESP chargé ! Active l'ESP dans l'onglet ESP.",
+    Duration = 6,
+})
+
+
+Starlight:LoadConfiguration()
